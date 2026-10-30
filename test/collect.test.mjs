@@ -105,3 +105,17 @@ test("excluded repositories are not read", async () => {
   assert.equal(activeRepos, 1);
   assert.ok(!calls.some((c) => c.name === "secret"));
 });
+
+test("private work adds up in one unnamed total for the private strip", async () => {
+  const shared = commit("ana", "private-shared");
+  const twoPrivate = {
+    repos: [repos[0], repos[1], { ...repos[1], name: "secret-copy" }],
+    commits: { web: [commit("ana")], secret: [shared, commit("ana")], "secret-copy": [shared] },
+  };
+  const { graphql } = fakeGraphql(twoPrivate);
+  const { total, privateTotal, byRepo } = await collectActivity(graphql, { ...base, includePrivate: true });
+  const sum = (m) => [...m.values()].reduce((s, n) => s + n, 0);
+  assert.equal(sum(total), 3);
+  assert.equal(sum(privateTotal), 2);
+  assert.deepEqual([...byRepo.keys()], ["web"]);
+});

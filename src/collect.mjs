@@ -93,7 +93,7 @@ export async function listRepositories(graphql, { org, includePrivate, includeFo
  * Commits not in `seen` yet are also added to `total`, so a commit that several
  * repositories share (a mirror or a copy) counts once for the organization.
  */
-export async function repositoryDailyCounts(graphql, { org, name, since, timeZone, excluded, seen = new Set(), total = new Map() }) {
+export async function repositoryDailyCounts(graphql, { org, name, since, timeZone, excluded, seen = new Set(), total = new Map(), alsoInto = null }) {
   const counts = new Map();
   let after = null;
   for (;;) {
@@ -107,6 +107,7 @@ export async function repositoryDailyCounts(graphql, { org, name, since, timeZon
       if (!seen.has(commit.oid)) {
         seen.add(commit.oid);
         total.set(key, (total.get(key) ?? 0) + 1);
+        alsoInto?.set(key, (alsoInto.get(key) ?? 0) + 1);
       }
     }
     if (!history.pageInfo.hasNextPage) break;
@@ -122,16 +123,24 @@ export async function repositoryDailyCounts(graphql, { org, name, since, timeZon
 export async function collectActivity(graphql, options) {
   const repos = await listRepositories(graphql, options);
   const total = new Map();
+  // Unique commits from private repositories, for one combined unnamed strip.
+  const privateTotal = new Map();
   const seen = new Set();
   const byRepo = new Map();
   let activeRepos = 0;
   const wanted = new Set(options.stripRepos.map((r) => r.toLowerCase()));
   for (const repo of repos) {
-    const counts = await repositoryDailyCounts(graphql, { ...options, name: repo.name, seen, total });
+    const counts = await repositoryDailyCounts(graphql, {
+      ...options,
+      name: repo.name,
+      seen,
+      total,
+      alsoInto: repo.isPrivate ? privateTotal : null,
+    });
     if (counts.size === 0) continue;
     activeRepos += 1;
     // Strips name the repository, so only public ones can have one.
     if (!repo.isPrivate && wanted.has(repo.name.toLowerCase())) byRepo.set(repo.name, counts);
   }
-  return { total, byRepo, activeRepos };
+  return { total, byRepo, privateTotal, activeRepos };
 }
