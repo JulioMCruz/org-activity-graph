@@ -2,10 +2,14 @@
 
 GitHub draws a contribution graph for people, not for organizations. This action draws one for a whole organization: every commit on the default branch of its repositories over the last year, in the same grid, colors and layout as a profile graph. Put it on your organization's profile page and visitors see the team's rhythm at a glance.
 
+<a href="https://raw.githubusercontent.com/JulioMCruz/org-activity-graph/main/docs/example.svg">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/example-dark.svg">
   <img alt="Example organization activity graph with weekly strips for three repositories" src="docs/example-light.svg">
 </picture>
+</a>
+
+Click the graph, then hover a square to see its count.
 
 ## What you get
 
@@ -13,6 +17,7 @@ GitHub draws a contribution graph for people, not for organizations. This action
 - The header GitHub uses: "3,850 commits in the last year across 57 repositories".
 - Optional weekly strips for the repositories you pick, to show where the work happens.
 - Bots left out: any account ending in `[bot]`, plus logins you list.
+- A count on every square, such as "12 commits on Oct 3, 2026". GitHub shows README images as plain pictures, so hovering does nothing there. The README links to a third file, `activity.svg`, which follows the visitor's theme and shows the count when you hover a square.
 - No dependencies. The action is plain Node 24 and calls the GitHub GraphQL API.
 
 ## Use it on your organization profile
@@ -24,10 +29,12 @@ Your organization's profile page is `profile/README.md` in its `.github` reposit
 3. Add this to `profile/README.md`, replacing `your-org`:
 
 ```html
+<a href="https://raw.githubusercontent.com/your-org/.github/activity/activity.svg">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/your-org/.github/activity/activity-dark.svg">
   <img alt="Activity across your-org repositories" src="https://raw.githubusercontent.com/your-org/.github/activity/activity-light.svg">
 </picture>
+</a>
 ```
 
 ## Inputs
@@ -37,12 +44,13 @@ Your organization's profile page is `profile/README.md` in its `.github` reposit
 | `org` | required | Organization login. |
 | `token` | `github.token` | Token used to read repositories and commits. The default token reads public repositories. |
 | `output-dir` | `dist` | Folder for the SVG files. |
-| `file-name` | `activity` | Writes `<file-name>-dark.svg` and `<file-name>-light.svg`. |
+| `file-name` | `activity` | Writes `<file-name>-dark.svg`, `<file-name>-light.svg` and `<file-name>.svg`, which follows the viewer's theme. |
 | `repos` | empty | Comma-separated public repositories that get a weekly strip, in this order. |
 | `include-private` | `false` | Count private repositories the token can read. They only add to the daily totals; their names never appear. |
 | `include-forks` | `false` | Count forked repositories. |
 | `include-archived` | `false` | Count archived repositories. |
 | `exclude-authors` | empty | Comma-separated logins or author names to leave out. |
+| `exclude-repos` | empty | Comma-separated repositories to leave out, such as a copy of an outside project that brought its whole history along. |
 | `palette` | `github` | `github` greens or `ember`, a pink-to-ember ramp. |
 | `colors-dark`, `colors-light` | empty | Five hex colors each, from no activity to most, to use your own palette. |
 | `timezone` | `UTC` | IANA time zone for grouping commits by day. |
@@ -54,10 +62,13 @@ Outputs: `total-commits` and `repositories`.
 
 The default token of a workflow can only read public repositories, so out of the box the graph counts public work. To count private work too, create a fine-grained token with read access to the organization's repository contents and metadata, store it as a secret, and pass it with `include-private: true`. Private repositories then add to the daily squares and the totals. They never get a strip or appear by name.
 
+Workflow inputs show up in the run's log, and the logs of a public repository are public. To leave out a private repository without naming it there, pass `exclude-repos` from a secret too: `exclude-repos: ${{ secrets.ORG_ACTIVITY_EXCLUDE_REPOS }}`.
+
 ## How commits are counted
 
 - Commits on each repository's default branch, by commit date, over the last 53 weeks.
 - A squash merge counts once; a merge commit and the commits it brings each count.
+- A commit that lives in several repositories, such as a mirror or a copy, counts once in the totals. Each strip still shows every commit on its own repository.
 - Shades follow the quartiles of the active days, the way GitHub shades a profile graph, so the busiest quarter of days is the darkest.
 - Repositories with no push in the last year are skipped without reading their history.
 

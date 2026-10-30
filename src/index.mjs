@@ -7,7 +7,7 @@ import { join } from "node:path";
 
 import { buildCalendar, dayKey } from "./calendar.mjs";
 import { collectActivity, makeClient } from "./collect.mjs";
-import { formatTitle, renderSvg } from "./render.mjs";
+import { adaptiveSvg, formatTitle, renderSvg } from "./render.mjs";
 import { resolveTheme } from "./themes.mjs";
 
 function input(name, fallback = "") {
@@ -51,6 +51,7 @@ export async function run() {
     includeForks: flag("include-forks"),
     includeArchived: flag("include-archived"),
     excluded: new Set(list("exclude-authors").map((v) => v.toLowerCase())),
+    excludedRepos: new Set(list("exclude-repos").map((v) => v.toLowerCase())),
     stripRepos,
   });
 
@@ -74,6 +75,7 @@ export async function run() {
     colorsDark: input("colors-dark"),
     colorsLight: input("colors-light"),
   };
+  const rendered = {};
   for (const mode of ["dark", "light"]) {
     const { svg } = renderSvg({
       calendar,
@@ -81,10 +83,17 @@ export async function run() {
       theme: resolveTheme(mode, themeOptions),
       meta: { title, org, updatedKey: todayKey },
     });
+    rendered[mode] = svg;
     const path = join(outputDir, `${fileName}-${mode}.svg`);
     writeFileSync(path, svg);
     console.log(`Wrote ${path}`);
   }
+  const adaptivePath = join(outputDir, `${fileName}.svg`);
+  writeFileSync(
+    adaptivePath,
+    adaptiveSvg(rendered.dark, resolveTheme("dark", themeOptions), resolveTheme("light", themeOptions)),
+  );
+  console.log(`Wrote ${adaptivePath}`);
 
   console.log(`${title}. Strips: ${strips.map((s) => s.name).join(", ") || "none"}.`);
   setOutput("total-commits", String(inWindow));
