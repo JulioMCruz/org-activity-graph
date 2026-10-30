@@ -1,0 +1,70 @@
+name: Org Activity Graph
+description: Draw a contribution-style activity graph for a whole GitHub organization, for its profile README.
+author: Julio M Cruz
+branding:
+  icon: grid
+  color: green
+inputs:
+  org:
+    description: Organization login, for example PerkOS-xyz.
+    required: true
+  token:
+    description: Token used to read repositories and commits. The default token reads public repositories.
+    required: false
+    default: ${{ github.token }}
+  output-dir:
+    description: Folder where the SVG files are written.
+    required: false
+    default: dist
+  file-name:
+    description: Base name of the files. The action writes <file-name>-dark.svg and <file-name>-light.svg.
+    required: false
+    default: activity
+  include-private:
+    description: Count commits from private repositories the token can read. Private repositories only add to the daily totals; their names never appear.
+    required: false
+    default: "false"
+  include-forks:
+    description: Count commits from forked repositories.
+    required: false
+    default: "false"
+  include-archived:
+    description: Count commits from archived repositories.
+    required: false
+    default: "false"
+  exclude-authors:
+    description: Comma-separated logins or author names to leave out. Accounts ending in [bot] are always left out.
+    required: false
+    default: ""
+  repos:
+    description: Comma-separated public repositories that get their own weekly strip under the graph. Empty means no strips.
+    required: false
+    default: ""
+  palette:
+    description: Color palette, github or ember. Ignored when colors-dark and colors-light are set.
+    required: false
+    default: github
+  colors-dark:
+    description: Five comma-separated colors for the dark variant, from no activity to most activity.
+    required: false
+    default: ""
+  colors-light:
+    description: Five comma-separated colors for the light variant, from no activity to most activity.
+    required: false
+    default: ""
+  timezone:
+    description: IANA time zone used to group commits by day, for example America/New_York.
+    required: false
+    default: UTC
+  title:
+    description: Header text. {commits} and {repos} are replaced with the totals.
+    required: false
+    default: "{commits} commits in the last year across {repos} repositories"
+outputs:
+  total-commits:
+    description: Commits counted in the last year.
+  repositories:
+    description: Repositories with at least one counted commit.
+runs:
+  using: node20
+  main: src/index.mjs

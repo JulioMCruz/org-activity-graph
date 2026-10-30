@@ -1,0 +1,14 @@
+{
+  "name": "org-activity-graph",
+  "version": "1.0.0",
+  "description": "GitHub Action that draws a contribution-style activity graph for a whole GitHub organization.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Julio M Cruz",
+  "repository": "github:JulioMCruz/org-activity-graph",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "example": "node scripts/render-example.mjs"
+  }
+}
