@@ -17,7 +17,7 @@ inputs:
     required: false
     default: dist
   file-name:
-    description: Base name of the files. The action writes <file-name>-dark.svg and <file-name>-light.svg.
+    description: Base name of the files. The action writes <file-name>-dark.svg, <file-name>-light.svg and <file-name>.svg, which follows the viewer's color scheme.
     required: false
     default: activity
   include-private:

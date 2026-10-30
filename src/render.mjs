@@ -60,6 +60,17 @@ function truncate(text, max) {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
+/** Hover text for a square: "No commits", "1 commit", "12 commits". */
+export function commitCount(n) {
+  if (n === 0) return "No commits";
+  return `${n.toLocaleString("en-US")} ${n === 1 ? "commit" : "commits"}`;
+}
+
+/** Faint outline GitHub draws around each square. */
+export function cellStroke(theme) {
+  return theme.background === "#ffffff" ? "rgba(31,35,40,0.06)" : "rgba(240,246,252,0.05)";
+}
+
 /**
  * @param calendar  result of buildCalendar for the org totals
  * @param strips    [{ name, countsByDay }] in display order
@@ -81,7 +92,7 @@ export function renderSvg({ calendar, strips = [], theme, meta }) {
   const stripsTop = boxBottom;
   if (strips.length) boxBottom += STRIP_HEAD_H + strips.length * STRIP_ROW_H + PAD / 2;
   const height = boxBottom + 1;
-  const stroke = theme.background === "#ffffff" ? "rgba(31,35,40,0.06)" : "rgba(240,246,252,0.05)";
+  const stroke = cellStroke(theme);
 
   const out = [];
   out.push(
@@ -106,7 +117,7 @@ export function renderSvg({ calendar, strips = [], theme, meta }) {
     for (const day of week) {
       const fill = theme.levels[levelFor(day.count, thresholds)];
       out.push(
-        `<rect x="${gridX + col * STEP}" y="${gridY + day.weekday * STEP}" width="${CELL}" height="${CELL}" rx="${RADIUS}" fill="${fill}"/>`,
+        `<rect x="${gridX + col * STEP}" y="${gridY + day.weekday * STEP}" width="${CELL}" height="${CELL}" rx="${RADIUS}" fill="${fill}"><title>${esc(`${commitCount(day.count)} on ${formatDay(day.key)}`)}</title></rect>`,
       );
     }
   });
@@ -139,7 +150,7 @@ export function renderSvg({ calendar, strips = [], theme, meta }) {
       totals.forEach((n, col) => {
         const fill = theme.levels[levelFor(n, repoThresholds)];
         out.push(
-          `<rect x="${gridX + col * STEP}" y="${y + 16}" width="${CELL}" height="${CELL}" rx="${RADIUS}" fill="${fill}"/>`,
+          `<rect x="${gridX + col * STEP}" y="${y + 16}" width="${CELL}" height="${CELL}" rx="${RADIUS}" fill="${fill}"><title>${esc(`${strip.name}: ${commitCount(n)} the week of ${formatDay(weeks[col][0].key)}`)}</title></rect>`,
         );
       });
       out.push(`</g>`);
@@ -148,4 +159,25 @@ export function renderSvg({ calendar, strips = [], theme, meta }) {
 
   out.push(`</svg>`);
   return { svg: out.join("\n"), totalCommits };
+}
+
+/**
+ * One SVG that follows the viewer's color scheme: the dark rendering plus CSS
+ * that swaps each dark color for its light counterpart. A README shows the
+ * dark and light files through <picture>; this one is for opening the graph
+ * on its own page, where hovering a square shows its count.
+ */
+export function adaptiveSvg(darkSvg, dark, light) {
+  const pairs = [
+    [dark.background, light.background],
+    [dark.border, light.border],
+    [cellStroke(dark), cellStroke(light)],
+    ...dark.levels.map((color, i) => [color, light.levels[i]]),
+  ];
+  const swaps = pairs
+    .filter(([from], i) => pairs.findIndex(([f]) => f === from) === i)
+    .map(([from, to]) => `[fill="${from}"]{fill:${to}}[stroke="${from}"]{stroke:${to}}`)
+    .join("");
+  const text = `text{fill:${light.muted}}.title,.repo{fill:${light.text}}`;
+  return darkSvg.replace("</style>", `@media (prefers-color-scheme: light){${swaps}${text}}</style>`);
 }

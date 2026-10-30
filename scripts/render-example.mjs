@@ -4,7 +4,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 
 import { buildCalendar } from "../src/calendar.mjs";
-import { formatTitle, renderSvg } from "../src/render.mjs";
+import { adaptiveSvg, formatTitle, renderSvg } from "../src/render.mjs";
 import { resolveTheme } from "../src/themes.mjs";
 
 function seeded(seed) {
@@ -39,6 +39,7 @@ const calendar = buildCalendar(total, todayKey);
 const commits = calendar.days.reduce((s, d) => s + d.count, 0);
 const title = formatTitle("{commits} commits in the last year across {repos} repositories", commits, repoNames.length);
 mkdirSync("docs", { recursive: true });
+const rendered = {};
 for (const mode of ["dark", "light"]) {
   const { svg } = renderSvg({
     calendar,
@@ -46,6 +47,9 @@ for (const mode of ["dark", "light"]) {
     theme: resolveTheme(mode),
     meta: { title, org: "example-org", updatedKey: todayKey },
   });
+  rendered[mode] = svg;
   writeFileSync(`docs/example-${mode}.svg`, svg);
   console.log(`Wrote docs/example-${mode}.svg`);
 }
+writeFileSync("docs/example.svg", adaptiveSvg(rendered.dark, resolveTheme("dark"), resolveTheme("light")));
+console.log("Wrote docs/example.svg");

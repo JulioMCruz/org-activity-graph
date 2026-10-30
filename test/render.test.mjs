@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { buildCalendar } from "../src/calendar.mjs";
-import { formatTitle, monthLabels, renderSvg } from "../src/render.mjs";
+import { adaptiveSvg, formatTitle, monthLabels, renderSvg } from "../src/render.mjs";
 import { resolveTheme } from "../src/themes.mjs";
 
 const calendar = buildCalendar(new Map([["2026-10-20", 3], ["2026-09-01", 1]]), "2026-10-25");
@@ -60,4 +60,31 @@ test("palettes and custom colors resolve", () => {
   assert.deepEqual(custom.levels, ["#fff", "#eee", "#ddd", "#ccc", "#bbb"]);
   assert.throws(() => resolveTheme("dark", { palette: "nope" }));
   assert.throws(() => resolveTheme("dark", { colorsDark: "#000", colorsLight: "#fff" }));
+});
+
+test("each square carries its count for hovering", () => {
+  const { svg } = renderSvg({
+    calendar,
+    strips: [{ name: "web-app", countsByDay: new Map([["2026-10-20", 3]]) }],
+    theme: resolveTheme("dark"),
+    meta: { title: "t", org: "o", updatedKey: "2026-10-25" },
+  });
+  assert.match(svg, /<title>3 commits on Oct 20, 2026<\/title><\/rect>/);
+  assert.match(svg, /<title>1 commit on Sep 1, 2026<\/title>/);
+  assert.match(svg, /<title>No commits on Oct 25, 2026<\/title>/);
+  assert.match(svg, /<title>web-app: 3 commits the week of Oct 18, 2026<\/title>/);
+});
+
+test("the adaptive file swaps every dark color under a light scheme", () => {
+  const dark = resolveTheme("dark");
+  const light = resolveTheme("light");
+  const { svg } = renderSvg({ calendar, theme: dark, meta: { title: "t", org: "o", updatedKey: "2026-10-25" } });
+  const adaptive = adaptiveSvg(svg, dark, light);
+  assert.match(adaptive, /@media \(prefers-color-scheme: light\)/);
+  for (const [i, color] of dark.levels.entries()) {
+    assert.ok(adaptive.includes(`[fill="${color}"]{fill:${light.levels[i]}}`));
+  }
+  assert.ok(adaptive.includes(`[fill="${dark.background}"]{fill:${light.background}}`));
+  assert.ok(adaptive.includes(`[stroke="${dark.border}"]{stroke:${light.border}}`));
+  assert.equal(adaptive.match(/<\/style>/g).length, 1);
 });

@@ -2,10 +2,14 @@
 
 GitHub draws a contribution graph for people, not for organizations. This action draws one for a whole organization: every commit on the default branch of its repositories over the last year, in the same grid, colors and layout as a profile graph. Put it on your organization's profile page and visitors see the team's rhythm at a glance.
 
+<a href="https://raw.githubusercontent.com/JulioMCruz/org-activity-graph/main/docs/example.svg">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/example-dark.svg">
   <img alt="Example organization activity graph with weekly strips for three repositories" src="docs/example-light.svg">
 </picture>
+</a>
+
+Click the graph, then hover a square to see its count.
 
 ## What you get
 
@@ -13,6 +17,7 @@ GitHub draws a contribution graph for people, not for organizations. This action
 - The header GitHub uses: "3,850 commits in the last year across 57 repositories".
 - Optional weekly strips for the repositories you pick, to show where the work happens.
 - Bots left out: any account ending in `[bot]`, plus logins you list.
+- A count on every square, such as "12 commits on Oct 3, 2026". GitHub shows README images as plain pictures, so hovering does nothing there. The README links to a third file, `activity.svg`, which follows the visitor's theme and shows the count when you hover a square.
 - No dependencies. The action is plain Node 24 and calls the GitHub GraphQL API.
 
 ## Use it on your organization profile
@@ -24,10 +29,12 @@ Your organization's profile page is `profile/README.md` in its `.github` reposit
 3. Add this to `profile/README.md`, replacing `your-org`:
 
 ```html
+<a href="https://raw.githubusercontent.com/your-org/.github/activity/activity.svg">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/your-org/.github/activity/activity-dark.svg">
   <img alt="Activity across your-org repositories" src="https://raw.githubusercontent.com/your-org/.github/activity/activity-light.svg">
 </picture>
+</a>
 ```
 
 ## Inputs
@@ -37,7 +44,7 @@ Your organization's profile page is `profile/README.md` in its `.github` reposit
 | `org` | required | Organization login. |
 | `token` | `github.token` | Token used to read repositories and commits. The default token reads public repositories. |
 | `output-dir` | `dist` | Folder for the SVG files. |
-| `file-name` | `activity` | Writes `<file-name>-dark.svg` and `<file-name>-light.svg`. |
+| `file-name` | `activity` | Writes `<file-name>-dark.svg`, `<file-name>-light.svg` and `<file-name>.svg`, which follows the viewer's theme. |
 | `repos` | empty | Comma-separated public repositories that get a weekly strip, in this order. |
 | `include-private` | `false` | Count private repositories the token can read. They only add to the daily totals; their names never appear. |
 | `include-forks` | `false` | Count forked repositories. |
