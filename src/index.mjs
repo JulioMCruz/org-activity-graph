@@ -51,6 +51,7 @@ export async function run() {
     includeForks: flag("include-forks"),
     includeArchived: flag("include-archived"),
     excluded: new Set(list("exclude-authors").map((v) => v.toLowerCase())),
+    excludedRepos: new Set(list("exclude-repos").map((v) => v.toLowerCase())),
     stripRepos,
   });
 

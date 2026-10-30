@@ -93,3 +93,15 @@ test("a commit that two repositories share counts once in the totals", async () 
   // Each strip still shows every commit on its own repository.
   assert.equal([...byRepo.get("web-mirror").values()].reduce((s, n) => s + n, 0), 1);
 });
+
+test("excluded repositories are not read", async () => {
+  const { graphql, calls } = fakeGraphql({ repos, commits });
+  const { total, activeRepos } = await collectActivity(graphql, {
+    ...base,
+    includePrivate: true,
+    excludedRepos: new Set(["secret"]),
+  });
+  assert.equal([...total.values()].reduce((s, n) => s + n, 0), 1);
+  assert.equal(activeRepos, 1);
+  assert.ok(!calls.some((c) => c.name === "secret"));
+});

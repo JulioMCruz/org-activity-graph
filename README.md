@@ -43,6 +43,7 @@ Your organization's profile page is `profile/README.md` in its `.github` reposit
 | `include-forks` | `false` | Count forked repositories. |
 | `include-archived` | `false` | Count archived repositories. |
 | `exclude-authors` | empty | Comma-separated logins or author names to leave out. |
+| `exclude-repos` | empty | Comma-separated repositories to leave out, such as a copy of an outside project that brought its whole history along. |
 | `palette` | `github` | `github` greens or `ember`, a pink-to-ember ramp. |
 | `colors-dark`, `colors-light` | empty | Five hex colors each, from no activity to most, to use your own palette. |
 | `timezone` | `UTC` | IANA time zone for grouping commits by day. |
@@ -53,6 +54,8 @@ Outputs: `total-commits` and `repositories`.
 ## Private repositories
 
 The default token of a workflow can only read public repositories, so out of the box the graph counts public work. To count private work too, create a fine-grained token with read access to the organization's repository contents and metadata, store it as a secret, and pass it with `include-private: true`. Private repositories then add to the daily squares and the totals. They never get a strip or appear by name.
+
+Workflow inputs show up in the run's log, and the logs of a public repository are public. To leave out a private repository without naming it there, pass `exclude-repos` from a secret too: `exclude-repos: ${{ secrets.ORG_ACTIVITY_EXCLUDE_REPOS }}`.
 
 ## How commits are counted
 

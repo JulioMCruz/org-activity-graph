@@ -57,7 +57,7 @@ export function isExcludedAuthor(author, excluded) {
   return excluded.has(login.toLowerCase()) || excluded.has(name.toLowerCase());
 }
 
-export async function listRepositories(graphql, { org, includePrivate, includeForks, includeArchived, since }) {
+export async function listRepositories(graphql, { org, includePrivate, includeForks, includeArchived, excludedRepos = new Set(), since }) {
   const repos = [];
   let after = null;
   for (;;) {
@@ -79,6 +79,7 @@ export async function listRepositories(graphql, { org, includePrivate, includeFo
       if (repo.isFork && !includeForks) continue;
       if (repo.isArchived && !includeArchived) continue;
       if (repo.isPrivate && !includePrivate) continue;
+      if (excludedRepos.has(repo.name.toLowerCase())) continue;
       repos.push(repo);
     }
     if (reachedOld || !page.pageInfo.hasNextPage) break;

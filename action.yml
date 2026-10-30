@@ -36,6 +36,10 @@ inputs:
     description: Comma-separated logins or author names to leave out. Accounts ending in [bot] are always left out.
     required: false
     default: ""
+  exclude-repos:
+    description: Comma-separated repositories to leave out, for example a copy of an outside project that brought its whole history along.
+    required: false
+    default: ""
   repos:
     description: Comma-separated public repositories that get their own weekly strip under the graph. Empty means no strips.
     required: false

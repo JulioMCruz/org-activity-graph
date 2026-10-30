@@ -26,6 +26,9 @@ jobs:
           # secret and uncomment these two lines. Only daily totals are shown.
           # token: ${{ secrets.ORG_ACTIVITY_TOKEN }}
           # include-private: true
+          # Repositories to leave out. Use a secret for private names, since
+          # inputs show up in the public run log.
+          # exclude-repos: ${{ secrets.ORG_ACTIVITY_EXCLUDE_REPOS }}
 
       - name: Publish to the activity branch
         working-directory: dist
