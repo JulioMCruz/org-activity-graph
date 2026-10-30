@@ -13,7 +13,7 @@ GitHub draws a contribution graph for people, not for organizations. This action
 - The header GitHub uses: "3,850 commits in the last year across 57 repositories".
 - Optional weekly strips for the repositories you pick, to show where the work happens.
 - Bots left out: any account ending in `[bot]`, plus logins you list.
-- No dependencies. The action is plain Node 20 and calls the GitHub GraphQL API.
+- No dependencies. The action is plain Node 24 and calls the GitHub GraphQL API.
 
 ## Use it on your organization profile
 

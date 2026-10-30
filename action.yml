@@ -66,5 +66,5 @@ outputs:
   repositories:
     description: Repositories with at least one counted commit.
 runs:
-  using: node20
+  using: node24
   main: src/index.mjs
