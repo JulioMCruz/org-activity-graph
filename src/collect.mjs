@@ -23,7 +23,7 @@ query($owner: String!, $name: String!, $since: GitTimestamp!, $after: String) {
         ... on Commit {
           history(first: 100, since: $since, after: $after) {
             pageInfo { hasNextPage endCursor }
-            nodes { committedDate author { name user { login } } }
+            nodes { oid committedDate author { name user { login } } }
           }
         }
       }
@@ -87,8 +87,12 @@ export async function listRepositories(graphql, { org, includePrivate, includeFo
   return repos;
 }
 
-/** Map of YYYY-MM-DD to commit count for one repository's default branch. */
-export async function repositoryDailyCounts(graphql, { org, name, since, timeZone, excluded }) {
+/**
+ * Map of YYYY-MM-DD to commit count for one repository's default branch.
+ * Commits not in `seen` yet are also added to `total`, so a commit that several
+ * repositories share (a mirror or a copy) counts once for the organization.
+ */
+export async function repositoryDailyCounts(graphql, { org, name, since, timeZone, excluded, seen = new Set(), total = new Map() }) {
   const counts = new Map();
   let after = null;
   for (;;) {
@@ -99,6 +103,10 @@ export async function repositoryDailyCounts(graphql, { org, name, since, timeZon
       if (isExcludedAuthor(commit.author, excluded)) continue;
       const key = dayKey(new Date(commit.committedDate), timeZone);
       counts.set(key, (counts.get(key) ?? 0) + 1);
+      if (!seen.has(commit.oid)) {
+        seen.add(commit.oid);
+        total.set(key, (total.get(key) ?? 0) + 1);
+      }
     }
     if (!history.pageInfo.hasNextPage) break;
     after = history.pageInfo.endCursor;
@@ -113,14 +121,14 @@ export async function repositoryDailyCounts(graphql, { org, name, since, timeZon
 export async function collectActivity(graphql, options) {
   const repos = await listRepositories(graphql, options);
   const total = new Map();
+  const seen = new Set();
   const byRepo = new Map();
   let activeRepos = 0;
   const wanted = new Set(options.stripRepos.map((r) => r.toLowerCase()));
   for (const repo of repos) {
-    const counts = await repositoryDailyCounts(graphql, { ...options, name: repo.name });
+    const counts = await repositoryDailyCounts(graphql, { ...options, name: repo.name, seen, total });
     if (counts.size === 0) continue;
     activeRepos += 1;
-    for (const [key, n] of counts) total.set(key, (total.get(key) ?? 0) + n);
     // Strips name the repository, so only public ones can have one.
     if (!repo.isPrivate && wanted.has(repo.name.toLowerCase())) byRepo.set(repo.name, counts);
   }

@@ -42,7 +42,8 @@ const repos = [
   { name: "secret", isPrivate: true, isFork: false, isArchived: false, pushedAt: recent, defaultBranchRef: { name: "main" } },
   { name: "fork", isPrivate: false, isFork: true, isArchived: false, pushedAt: recent, defaultBranchRef: { name: "main" } },
 ];
-const commit = (login) => ({ committedDate: recent, author: { name: login, user: { login } } });
+let nextOid = 0;
+const commit = (login, oid = `oid-${nextOid++}`) => ({ oid, committedDate: recent, author: { name: login, user: { login } } });
 const commits = {
   web: [commit("ana"), commit("dependabot[bot]")],
   secret: [commit("ana"), commit("ana")],
@@ -73,4 +74,22 @@ test("private repositories add to totals but never get a named strip", async () 
   assert.equal([...total.values()].reduce((s, n) => s + n, 0), 3);
   assert.equal(activeRepos, 2);
   assert.deepEqual([...byRepo.keys()], ["web"]);
+});
+
+test("a commit that two repositories share counts once in the totals", async () => {
+  const shared = commit("ana", "shared-oid");
+  const mirrored = {
+    repos: [repos[0], { ...repos[0], name: "web-mirror" }],
+    commits: { web: [shared, commit("ana")], "web-mirror": [shared] },
+  };
+  const { graphql } = fakeGraphql(mirrored);
+  const { total, byRepo, activeRepos } = await collectActivity(graphql, {
+    ...base,
+    includePrivate: false,
+    stripRepos: ["web", "web-mirror"],
+  });
+  assert.equal([...total.values()].reduce((s, n) => s + n, 0), 2);
+  assert.equal(activeRepos, 2);
+  // Each strip still shows every commit on its own repository.
+  assert.equal([...byRepo.get("web-mirror").values()].reduce((s, n) => s + n, 0), 1);
 });

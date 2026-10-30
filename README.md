@@ -58,6 +58,7 @@ The default token of a workflow can only read public repositories, so out of the
 
 - Commits on each repository's default branch, by commit date, over the last 53 weeks.
 - A squash merge counts once; a merge commit and the commits it brings each count.
+- A commit that lives in several repositories, such as a mirror or a copy, counts once in the totals. Each strip still shows every commit on its own repository.
 - Shades follow the quartiles of the active days, the way GitHub shades a profile graph, so the busiest quarter of days is the darkest.
 - Repositories with no push in the last year are skipped without reading their history.
 
