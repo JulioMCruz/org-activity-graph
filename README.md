@@ -47,6 +47,7 @@ Your organization's profile page is `profile/README.md` in its `.github` reposit
 | `file-name` | `activity` | Writes `<file-name>-dark.svg`, `<file-name>-light.svg` and `<file-name>.svg`, which follows the viewer's theme. |
 | `repos` | empty | Comma-separated public repositories that get a weekly strip, in this order. |
 | `include-private` | `false` | Count private repositories the token can read. They only add to the daily totals; their names never appear. |
+| `private-strip` | `false` | Add one strip named "Private repositories" with the combined weekly commits of every private repository, without naming any of them. Needs `include-private`. |
 | `include-forks` | `false` | Count forked repositories. |
 | `include-archived` | `false` | Count archived repositories. |
 | `exclude-authors` | empty | Comma-separated logins or author names to leave out. |
@@ -60,7 +61,7 @@ Outputs: `total-commits` and `repositories`.
 
 ## Private repositories
 
-The default token of a workflow can only read public repositories, so out of the box the graph counts public work. To count private work too, create a fine-grained token with read access to the organization's repository contents and metadata, store it as a secret, and pass it with `include-private: true`. Private repositories then add to the daily squares and the totals. They never get a strip or appear by name.
+The default token of a workflow can only read public repositories, so out of the box the graph counts public work. To count private work too, create a fine-grained token with read access to the organization's repository contents and metadata, store it as a secret, and pass it with `include-private: true`. Private repositories then add to the daily squares and the totals. They never get a strip of their own or appear by name. To show private work on its own row, set `private-strip: true`: it adds one strip, "Private repositories", with their combined weekly commits.
 
 Workflow inputs show up in the run's log, and the logs of a public repository are public. To leave out a private repository without naming it there, pass `exclude-repos` from a secret too: `exclude-repos: ${{ secrets.ORG_ACTIVITY_EXCLUDE_REPOS }}`.
 

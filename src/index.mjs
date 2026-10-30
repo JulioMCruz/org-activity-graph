@@ -43,7 +43,7 @@ export async function run() {
   const stripRepos = list("repos");
 
   const graphql = makeClient(token);
-  const { total, byRepo, activeRepos } = await collectActivity(graphql, {
+  const { total, byRepo, privateTotal, activeRepos } = await collectActivity(graphql, {
     org,
     since,
     timeZone,
@@ -60,6 +60,9 @@ export async function run() {
     .map((name) => [...byRepo.entries()].find(([n]) => n.toLowerCase() === name.toLowerCase()))
     .filter(Boolean)
     .map(([name, countsByDay]) => ({ name, countsByDay }));
+  if (flag("private-strip") && flag("include-private")) {
+    strips.push({ name: "Private repositories", countsByDay: privateTotal });
+  }
   const inWindow = calendar.days.reduce((s, d) => s + d.count, 0);
   const title = formatTitle(
     input("title", "{commits} commits in the last year across {repos} repositories"),

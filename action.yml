@@ -24,6 +24,10 @@ inputs:
     description: Count commits from private repositories the token can read. Private repositories only add to the daily totals; their names never appear.
     required: false
     default: "false"
+  private-strip:
+    description: Add one strip named "Private repositories" with the combined weekly commits of every private repository. Needs include-private.
+    required: false
+    default: "false"
   include-forks:
     description: Count commits from forked repositories.
     required: false
