@@ -19,6 +19,7 @@ Click the graph, then hover a square to see its count.
 - Bots left out: any account ending in `[bot]`, plus logins you list.
 - A count on every square, such as "12 commits on Oct 3, 2026". GitHub shows README images as plain pictures, so hovering does nothing there. The README links to a third file, `activity.svg`, which follows the visitor's theme and shows the count when you hover a square.
 - An optional reveal that lights up the year week by week when the graph loads. It is plain CSS, so it plays inside a README too.
+- Optional seasonal effects: snow, falling leaves, pumpkins, fireworks and more, in plain SVG and CSS.
 - No dependencies. The action is plain Node 24 and calls the GitHub GraphQL API.
 
 ## Use it on your organization profile
@@ -55,6 +56,7 @@ Your organization's profile page is `profile/README.md` in its `.github` reposit
 | `exclude-repos` | empty | Comma-separated repositories to leave out, such as a copy of an outside project that brought its whole history along. |
 | `palette` | `github` | `github` greens, `ember`, a pink-to-ember ramp, or `seasonal`, which follows the calendar. See [Seasons](#seasons). |
 | `animate` | `false` | Light up the squares week by week when the graph loads. They wait dimmed, so every square stays readable. It plays once per load, and viewers who prefer reduced motion see the finished graph. |
+| `effects` | `false` | Add the season's decoration, for the seasonal palettes. See [Seasons](#seasons). |
 | `colors-dark`, `colors-light` | empty | Five hex colors each, from no activity to most, to use your own palette. |
 | `timezone` | `UTC` | IANA time zone for grouping commits by day. |
 | `title` | `{commits} commits in the last year across {repos} repositories` | Header text. |
@@ -76,6 +78,20 @@ Set `palette: seasonal` and the graph changes color with the date, in your `time
 | Oct 25 to Oct 31 | `halloween` | Pumpkin glow |
 
 Holidays take over from the season around them. To keep one look all year, use its name as the `palette`.
+
+Set `effects: true` to dress the graph for the season:
+
+| Palette | When the graph loads | Stays on the graph |
+|---|---|---|
+| `winter` | Snowfall | Snow on the frame and a snowman |
+| `christmas` | Snowfall | String lights and a tree |
+| `newyear` | Fireworks and confetti | Champagne and sparkles |
+| `spring` | Cherry petals | A branch in bloom |
+| `summer` | Rising bubbles | Sun, waves and a sailboat |
+| `autumn` | Falling maple leaves | A pile of leaves |
+| `halloween` | Bats | Lit pumpkins around the graph |
+
+Everything in motion leaves the frame when it finishes, and the pieces that stay sit in the empty bands around the squares, so every count stays readable. Viewers who prefer reduced motion see only the pieces that stay.
 
 ## Private repositories
 

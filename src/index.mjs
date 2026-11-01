@@ -87,6 +87,7 @@ export async function run() {
       theme: resolveTheme(mode, themeOptions),
       meta: { title, org, updatedKey: todayKey },
       animate: flag("animate"),
+      effects: flag("effects"),
     });
     rendered[mode] = svg;
     const path = join(outputDir, `${fileName}-${mode}.svg`);
