@@ -1,5 +1,5 @@
-name: Org Activity Graph
-description: Draw a contribution-style activity graph for a whole GitHub organization, for its profile README.
+name: Seasonal Activity Graph
+description: Seasonal, animated contribution graph for your GitHub profile or your whole organization.
 author: Julio M Cruz
 branding:
   icon: grid
