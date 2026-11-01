@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { buildCalendar } from "../src/calendar.mjs";
-import { adaptiveSvg, formatTitle, monthLabels, renderSvg } from "../src/render.mjs";
+import { adaptiveSvg, formatTitle, monthLabels, renderSvg, revealCss } from "../src/render.mjs";
 import { PALETTES, resolveTheme, seasonFor } from "../src/themes.mjs";
 
 const calendar = buildCalendar(new Map([["2026-10-20", 3], ["2026-09-01", 1]]), "2026-10-25");
@@ -108,6 +108,38 @@ test("seasonal ramps get stronger with activity", () => {
     assert.ok(dark.every((v, i) => i === 0 || v > dark[i - 1]), `${name} dark`);
     assert.ok(light.every((v, i) => i === 0 || v < light[i - 1]), `${name} light`);
   }
+});
+
+test("animate lights up every square week by week and changes nothing else", () => {
+  const options = {
+    calendar,
+    strips: [{ name: "web-app", countsByDay: new Map([["2026-10-20", 3]]) }],
+    theme: resolveTheme("dark"),
+    meta: { title: "t", org: "o", updatedKey: "2026-10-25" },
+  };
+  const plain = renderSvg(options).svg;
+  const animated = renderSvg({ ...options, animate: true }).svg;
+  const weekCount = calendar.weeks.length;
+  assert.doesNotMatch(plain, /@keyframes|class="cell/);
+  assert.equal((animated.match(/<rect class="cell w\d+"/g) ?? []).length, calendar.days.length + weekCount);
+  assert.match(animated, /prefers-reduced-motion:reduce/);
+  assert.match(animated, new RegExp(`\\.w${weekCount - 1}\\{animation-delay:`));
+  const stripped = animated.replace(/ class="cell w\d+"/g, "").replace(revealCss(weekCount), "");
+  assert.equal(stripped, plain);
+});
+
+test("squares wait dimmed and are never hidden", () => {
+  const [, dim] = revealCss(53).match(/from\{opacity:([\d.]+)/);
+  assert.ok(Number(dim) >= 0.25);
+});
+
+test("the adaptive file keeps the reveal", () => {
+  const dark = resolveTheme("dark", { palette: "halloween" });
+  const light = resolveTheme("light", { palette: "halloween" });
+  const { svg } = renderSvg({ calendar, theme: dark, meta: { title: "t", org: "o", updatedKey: "2026-10-25" }, animate: true });
+  const adaptive = adaptiveSvg(svg, dark, light);
+  assert.match(adaptive, /@keyframes pop/);
+  assert.match(adaptive, /@media \(prefers-color-scheme: light\)/);
 });
 
 test("each square carries its count for hovering", () => {

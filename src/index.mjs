@@ -86,6 +86,7 @@ export async function run() {
       strips,
       theme: resolveTheme(mode, themeOptions),
       meta: { title, org, updatedKey: todayKey },
+      animate: flag("animate"),
     });
     rendered[mode] = svg;
     const path = join(outputDir, `${fileName}-${mode}.svg`);
