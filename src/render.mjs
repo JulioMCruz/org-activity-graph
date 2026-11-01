@@ -17,6 +17,11 @@ const STRIP_HEAD_H = 30;
 const STRIP_ROW_H = 34;
 const FONT = `-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif`;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// The reveal: a new week lights up every WEEK_DELAY seconds, each square going
+// from DIM_OPACITY to full strength over POP_SECONDS.
+const WEEK_DELAY = 0.045;
+const POP_SECONDS = 0.42;
+const DIM_OPACITY = 0.35;
 
 function esc(value) {
   return String(value)
@@ -72,12 +77,29 @@ export function cellStroke(theme) {
 }
 
 /**
+ * CSS that lights up the graph from the oldest week to the newest. A README
+ * shows the SVG as an image, where CSS animation runs and scripts do not.
+ * Squares wait dimmed and never hidden, so whenever a screenshot tool or a
+ * paused page catches the graph, every square is still there.
+ */
+export function revealCss(weekCount) {
+  const delays = Array.from({ length: weekCount }, (_, week) => `.w${week}{animation-delay:${(week * WEEK_DELAY).toFixed(2)}s}`);
+  return [
+    `.cell{animation:pop ${POP_SECONDS}s cubic-bezier(.2,.9,.3,1.3) both;transform-box:fill-box;transform-origin:center}`,
+    `@keyframes pop{from{opacity:${DIM_OPACITY};transform:scale(.7)}to{opacity:1;transform:none}}`,
+    `@media (prefers-reduced-motion:reduce){.cell{animation:none}}`,
+    ...delays,
+  ].join("");
+}
+
+/**
  * @param calendar  result of buildCalendar for the org totals
  * @param strips    [{ name, countsByDay }] in display order
  * @param theme     resolveTheme(...)
  * @param meta      { title, org, updatedKey }
+ * @param animate   light up the squares week by week when the graph loads
  */
-export function renderSvg({ calendar, strips = [], theme, meta }) {
+export function renderSvg({ calendar, strips = [], theme, meta, animate = false }) {
   const { weeks, days } = calendar;
   const totalCommits = days.reduce((s, d) => s + d.count, 0);
   const thresholds = levelThresholds(days.map((d) => d.count));
@@ -93,13 +115,14 @@ export function renderSvg({ calendar, strips = [], theme, meta }) {
   if (strips.length) boxBottom += STRIP_HEAD_H + strips.length * STRIP_ROW_H + PAD / 2;
   const height = boxBottom + 1;
   const stroke = cellStroke(theme);
+  const cellClass = (col) => (animate ? ` class="cell w${col}"` : "");
 
   const out = [];
   out.push(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="t d">`,
     `<title id="t">${esc(meta.title)}</title>`,
     `<desc id="d">${esc(`Daily commits across the ${meta.org} organization from ${formatDay(calendar.startKey)} to ${formatDay(calendar.endKey)}.`)}</desc>`,
-    `<style>text{font-family:${FONT};fill:${theme.muted};font-size:12px}.title{fill:${theme.text};font-size:16px}.repo{fill:${theme.text}}</style>`,
+    `<style>text{font-family:${FONT};fill:${theme.muted};font-size:12px}.title{fill:${theme.text};font-size:16px}.repo{fill:${theme.text}}${animate ? revealCss(weeks.length) : ""}</style>`,
     `<rect width="${width}" height="${height}" fill="${theme.background}"/>`,
     `<text class="title" x="1" y="20">${esc(meta.title)}</text>`,
     `<rect x="0.5" y="${TITLE_H + 0.5}" width="${boxW + 1}" height="${boxBottom - TITLE_H}" rx="6" fill="none" stroke="${theme.border}"/>`,
@@ -117,7 +140,7 @@ export function renderSvg({ calendar, strips = [], theme, meta }) {
     for (const day of week) {
       const fill = theme.levels[levelFor(day.count, thresholds)];
       out.push(
-        `<rect x="${gridX + col * STEP}" y="${gridY + day.weekday * STEP}" width="${CELL}" height="${CELL}" rx="${RADIUS}" fill="${fill}"><title>${esc(`${commitCount(day.count)} on ${formatDay(day.key)}`)}</title></rect>`,
+        `<rect${cellClass(col)} x="${gridX + col * STEP}" y="${gridY + day.weekday * STEP}" width="${CELL}" height="${CELL}" rx="${RADIUS}" fill="${fill}"><title>${esc(`${commitCount(day.count)} on ${formatDay(day.key)}`)}</title></rect>`,
       );
     }
   });
@@ -150,7 +173,7 @@ export function renderSvg({ calendar, strips = [], theme, meta }) {
       totals.forEach((n, col) => {
         const fill = theme.levels[levelFor(n, repoThresholds)];
         out.push(
-          `<rect x="${gridX + col * STEP}" y="${y + 16}" width="${CELL}" height="${CELL}" rx="${RADIUS}" fill="${fill}"><title>${esc(`${strip.name}: ${commitCount(n)} the week of ${formatDay(weeks[col][0].key)}`)}</title></rect>`,
+          `<rect${cellClass(col)} x="${gridX + col * STEP}" y="${y + 16}" width="${CELL}" height="${CELL}" rx="${RADIUS}" fill="${fill}"><title>${esc(`${strip.name}: ${commitCount(n)} the week of ${formatDay(weeks[col][0].key)}`)}</title></rect>`,
         );
       });
       out.push(`</g>`);

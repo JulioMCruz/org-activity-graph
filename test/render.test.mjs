@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { buildCalendar } from "../src/calendar.mjs";
-import { adaptiveSvg, formatTitle, monthLabels, renderSvg } from "../src/render.mjs";
-import { resolveTheme } from "../src/themes.mjs";
+import { adaptiveSvg, formatTitle, monthLabels, renderSvg, revealCss } from "../src/render.mjs";
+import { PALETTES, resolveTheme, seasonFor } from "../src/themes.mjs";
 
 const calendar = buildCalendar(new Map([["2026-10-20", 3], ["2026-09-01", 1]]), "2026-10-25");
 
@@ -60,6 +60,86 @@ test("palettes and custom colors resolve", () => {
   assert.deepEqual(custom.levels, ["#fff", "#eee", "#ddd", "#ccc", "#bbb"]);
   assert.throws(() => resolveTheme("dark", { palette: "nope" }));
   assert.throws(() => resolveTheme("dark", { colorsDark: "#000", colorsLight: "#fff" }));
+});
+
+test("the seasonal palette follows the calendar", () => {
+  const expected = {
+    "2026-10-24": "autumn",
+    "2026-10-25": "halloween",
+    "2026-10-31": "halloween",
+    "2026-11-01": "autumn",
+    "2026-12-01": "winter",
+    "2026-12-17": "winter",
+    "2026-12-18": "christmas",
+    "2026-12-26": "christmas",
+    "2026-12-27": "newyear",
+    "2027-01-02": "newyear",
+    "2027-01-03": "winter",
+    "2028-02-29": "winter",
+    "2027-03-01": "spring",
+    "2027-06-01": "summer",
+    "2027-09-01": "autumn",
+  };
+  for (const [key, name] of Object.entries(expected)) assert.equal(seasonFor(key), name, key);
+  assert.deepEqual(
+    resolveTheme("dark", { palette: "seasonal", todayKey: "2026-12-25" }).levels,
+    PALETTES.christmas.dark,
+  );
+});
+
+test("every day of a leap year has a season", () => {
+  for (let day = 0; day < 366; day++) {
+    const key = new Date(Date.UTC(2028, 0, 1 + day)).toISOString().slice(0, 10);
+    assert.ok(PALETTES[seasonFor(key)], key);
+  }
+});
+
+function luminance(hex) {
+  const [r, g, b] = [1, 3, 5]
+    .map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+test("seasonal ramps get stronger with activity", () => {
+  for (const name of ["spring", "summer", "autumn", "halloween", "winter", "christmas", "newyear"]) {
+    const dark = PALETTES[name].dark.map(luminance);
+    const light = PALETTES[name].light.map(luminance);
+    assert.ok(dark.every((v, i) => i === 0 || v > dark[i - 1]), `${name} dark`);
+    assert.ok(light.every((v, i) => i === 0 || v < light[i - 1]), `${name} light`);
+  }
+});
+
+test("animate lights up every square week by week and changes nothing else", () => {
+  const options = {
+    calendar,
+    strips: [{ name: "web-app", countsByDay: new Map([["2026-10-20", 3]]) }],
+    theme: resolveTheme("dark"),
+    meta: { title: "t", org: "o", updatedKey: "2026-10-25" },
+  };
+  const plain = renderSvg(options).svg;
+  const animated = renderSvg({ ...options, animate: true }).svg;
+  const weekCount = calendar.weeks.length;
+  assert.doesNotMatch(plain, /@keyframes|class="cell/);
+  assert.equal((animated.match(/<rect class="cell w\d+"/g) ?? []).length, calendar.days.length + weekCount);
+  assert.match(animated, /prefers-reduced-motion:reduce/);
+  assert.match(animated, new RegExp(`\\.w${weekCount - 1}\\{animation-delay:`));
+  const stripped = animated.replace(/ class="cell w\d+"/g, "").replace(revealCss(weekCount), "");
+  assert.equal(stripped, plain);
+});
+
+test("squares wait dimmed and are never hidden", () => {
+  const [, dim] = revealCss(53).match(/from\{opacity:([\d.]+)/);
+  assert.ok(Number(dim) >= 0.25);
+});
+
+test("the adaptive file keeps the reveal", () => {
+  const dark = resolveTheme("dark", { palette: "halloween" });
+  const light = resolveTheme("light", { palette: "halloween" });
+  const { svg } = renderSvg({ calendar, theme: dark, meta: { title: "t", org: "o", updatedKey: "2026-10-25" }, animate: true });
+  const adaptive = adaptiveSvg(svg, dark, light);
+  assert.match(adaptive, /@keyframes pop/);
+  assert.match(adaptive, /@media \(prefers-color-scheme: light\)/);
 });
 
 test("each square carries its count for hovering", () => {

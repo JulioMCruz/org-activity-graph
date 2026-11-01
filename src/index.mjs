@@ -77,6 +77,7 @@ export async function run() {
     palette: input("palette", "github"),
     colorsDark: input("colors-dark"),
     colorsLight: input("colors-light"),
+    todayKey,
   };
   const rendered = {};
   for (const mode of ["dark", "light"]) {
@@ -85,6 +86,7 @@ export async function run() {
       strips,
       theme: resolveTheme(mode, themeOptions),
       meta: { title, org, updatedKey: todayKey },
+      animate: flag("animate"),
     });
     rendered[mode] = svg;
     const path = join(outputDir, `${fileName}-${mode}.svg`);

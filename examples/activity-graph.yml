@@ -22,6 +22,10 @@ jobs:
           repos: web-app,api
           timezone: America/New_York
           output-dir: dist
+          # Colors that change with the season and the holidays.
+          # palette: seasonal
+          # Light up the year week by week when the graph loads.
+          # animate: true
           # To count private repositories too, store a read-only token as a
           # secret and uncomment these two lines. Only daily totals are shown.
           # token: ${{ secrets.ORG_ACTIVITY_TOKEN }}
