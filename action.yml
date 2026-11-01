@@ -49,7 +49,7 @@ inputs:
     required: false
     default: ""
   palette:
-    description: Color palette, github or ember. Ignored when colors-dark and colors-light are set.
+    description: Color palette. github, ember, or seasonal, which follows the calendar in your timezone. A season also works by name, for example winter or christmas. Ignored when colors-dark and colors-light are set.
     required: false
     default: github
   colors-dark:

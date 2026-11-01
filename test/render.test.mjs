@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { buildCalendar } from "../src/calendar.mjs";
 import { adaptiveSvg, formatTitle, monthLabels, renderSvg } from "../src/render.mjs";
-import { resolveTheme } from "../src/themes.mjs";
+import { PALETTES, resolveTheme, seasonFor } from "../src/themes.mjs";
 
 const calendar = buildCalendar(new Map([["2026-10-20", 3], ["2026-09-01", 1]]), "2026-10-25");
 
@@ -60,6 +60,54 @@ test("palettes and custom colors resolve", () => {
   assert.deepEqual(custom.levels, ["#fff", "#eee", "#ddd", "#ccc", "#bbb"]);
   assert.throws(() => resolveTheme("dark", { palette: "nope" }));
   assert.throws(() => resolveTheme("dark", { colorsDark: "#000", colorsLight: "#fff" }));
+});
+
+test("the seasonal palette follows the calendar", () => {
+  const expected = {
+    "2026-10-24": "autumn",
+    "2026-10-25": "halloween",
+    "2026-10-31": "halloween",
+    "2026-11-01": "autumn",
+    "2026-12-01": "winter",
+    "2026-12-17": "winter",
+    "2026-12-18": "christmas",
+    "2026-12-26": "christmas",
+    "2026-12-27": "newyear",
+    "2027-01-02": "newyear",
+    "2027-01-03": "winter",
+    "2028-02-29": "winter",
+    "2027-03-01": "spring",
+    "2027-06-01": "summer",
+    "2027-09-01": "autumn",
+  };
+  for (const [key, name] of Object.entries(expected)) assert.equal(seasonFor(key), name, key);
+  assert.deepEqual(
+    resolveTheme("dark", { palette: "seasonal", todayKey: "2026-12-25" }).levels,
+    PALETTES.christmas.dark,
+  );
+});
+
+test("every day of a leap year has a season", () => {
+  for (let day = 0; day < 366; day++) {
+    const key = new Date(Date.UTC(2028, 0, 1 + day)).toISOString().slice(0, 10);
+    assert.ok(PALETTES[seasonFor(key)], key);
+  }
+});
+
+function luminance(hex) {
+  const [r, g, b] = [1, 3, 5]
+    .map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+test("seasonal ramps get stronger with activity", () => {
+  for (const name of ["spring", "summer", "autumn", "halloween", "winter", "christmas", "newyear"]) {
+    const dark = PALETTES[name].dark.map(luminance);
+    const light = PALETTES[name].light.map(luminance);
+    assert.ok(dark.every((v, i) => i === 0 || v > dark[i - 1]), `${name} dark`);
+    assert.ok(light.every((v, i) => i === 0 || v < light[i - 1]), `${name} light`);
+  }
 });
 
 test("each square carries its count for hovering", () => {

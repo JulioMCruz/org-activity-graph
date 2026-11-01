@@ -52,12 +52,28 @@ Your organization's profile page is `profile/README.md` in its `.github` reposit
 | `include-archived` | `false` | Count archived repositories. |
 | `exclude-authors` | empty | Comma-separated logins or author names to leave out. |
 | `exclude-repos` | empty | Comma-separated repositories to leave out, such as a copy of an outside project that brought its whole history along. |
-| `palette` | `github` | `github` greens or `ember`, a pink-to-ember ramp. |
+| `palette` | `github` | `github` greens, `ember`, a pink-to-ember ramp, or `seasonal`, which follows the calendar. See [Seasons](#seasons). |
 | `colors-dark`, `colors-light` | empty | Five hex colors each, from no activity to most, to use your own palette. |
 | `timezone` | `UTC` | IANA time zone for grouping commits by day. |
 | `title` | `{commits} commits in the last year across {repos} repositories` | Header text. |
 
 Outputs: `total-commits` and `repositories`.
+
+## Seasons
+
+Set `palette: seasonal` and the graph changes color with the date, in your `timezone`. The next scheduled run after the date changes picks up the new colors, with nothing else to do. The dates follow the northern hemisphere.
+
+| Dates | Palette | Colors |
+|---|---|---|
+| Dec 1 to Feb 29 | `winter` | GitHub's winter blues |
+| Dec 18 to Dec 26 | `christmas` | Pine, holly berries and a gold star |
+| Dec 27 to Jan 2 | `newyear` | Midnight and champagne |
+| Mar 1 to May 31 | `spring` | Cherry blossom |
+| Jun 1 to Aug 31 | `summer` | Warm sea |
+| Sep 1 to Nov 30 | `autumn` | Maple leaves |
+| Oct 25 to Oct 31 | `halloween` | Pumpkin glow |
+
+Holidays take over from the season around them. To keep one look all year, use its name as the `palette`.
 
 ## Private repositories
 

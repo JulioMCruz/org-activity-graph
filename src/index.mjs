@@ -77,6 +77,7 @@ export async function run() {
     palette: input("palette", "github"),
     colorsDark: input("colors-dark"),
     colorsLight: input("colors-light"),
+    todayKey,
   };
   const rendered = {};
   for (const mode of ["dark", "light"]) {
