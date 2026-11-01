@@ -3,6 +3,7 @@
 // labels on top, and a Less/More legend under the grid.
 
 import { levelFor, levelThresholds, weeklyTotals } from "./calendar.mjs";
+import { seasonEffect } from "./effects.mjs";
 
 const CELL = 10;
 const STEP = 13;
@@ -98,8 +99,9 @@ export function revealCss(weekCount) {
  * @param theme     resolveTheme(...)
  * @param meta      { title, org, updatedKey }
  * @param animate   light up the squares week by week when the graph loads
+ * @param effects   add the season's decoration, for palettes that have one
  */
-export function renderSvg({ calendar, strips = [], theme, meta, animate = false }) {
+export function renderSvg({ calendar, strips = [], theme, meta, animate = false, effects = false }) {
   const { weeks, days } = calendar;
   const totalCommits = days.reduce((s, d) => s + d.count, 0);
   const thresholds = levelThresholds(days.map((d) => d.count));
@@ -116,13 +118,31 @@ export function renderSvg({ calendar, strips = [], theme, meta, animate = false 
   const height = boxBottom + 1;
   const stroke = cellStroke(theme);
   const cellClass = (col) => (animate ? ` class="cell w${col}"` : "");
+  const legendCellsW = 5 * STEP - (STEP - CELL);
+  const moreW = 30;
+  const legendX = gridX + gridW - moreW - legendCellsW - 6;
+  const effect = effects
+    ? seasonEffect(theme.season, theme.decor, {
+        width,
+        height,
+        boxW,
+        frameTop: TITLE_H,
+        hasStrips: strips.length > 0,
+        stripsTop,
+        legendY,
+        footerFrom: gridX + 150,
+        footerTo: legendX - 44,
+        titleEnd: 1 + meta.title.length * 7.8,
+        delayAt: (x) => (Math.max(0, x - gridX) / STEP * WEEK_DELAY).toFixed(2),
+      })
+    : null;
 
   const out = [];
   out.push(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="t d">`,
     `<title id="t">${esc(meta.title)}</title>`,
     `<desc id="d">${esc(`Daily commits across the ${meta.org} organization from ${formatDay(calendar.startKey)} to ${formatDay(calendar.endKey)}.`)}</desc>`,
-    `<style>text{font-family:${FONT};fill:${theme.muted};font-size:12px}.title{fill:${theme.text};font-size:16px}.repo{fill:${theme.text}}${animate ? revealCss(weeks.length) : ""}</style>`,
+    `<style>text{font-family:${FONT};fill:${theme.muted};font-size:12px}.title{fill:${theme.text};font-size:16px}.repo{fill:${theme.text}}${animate ? revealCss(weeks.length) : ""}${effect?.css ?? ""}</style>`,
     `<rect width="${width}" height="${height}" fill="${theme.background}"/>`,
     `<text class="title" x="1" y="20">${esc(meta.title)}</text>`,
     `<rect x="0.5" y="${TITLE_H + 0.5}" width="${boxW + 1}" height="${boxBottom - TITLE_H}" rx="6" fill="none" stroke="${theme.border}"/>`,
@@ -148,9 +168,6 @@ export function renderSvg({ calendar, strips = [], theme, meta, animate = false 
 
   // Footer row: update date on the left, Less/More legend on the right.
   out.push(`<text x="${gridX}" y="${legendY + 10}">${esc(`Updated ${formatDay(meta.updatedKey)}`)}</text>`);
-  const legendCellsW = 5 * STEP - (STEP - CELL);
-  const moreW = 30;
-  const legendX = gridX + gridW - moreW - legendCellsW - 6;
   out.push(`<text x="${legendX - 6}" y="${legendY + 10}" text-anchor="end">Less</text>`);
   theme.levels.forEach((fill, i) => {
     out.push(
@@ -180,8 +197,9 @@ export function renderSvg({ calendar, strips = [], theme, meta, animate = false 
     });
   }
 
+  if (effect) out.push(...effect.resting.map((piece) => piece.svg), effect.moving);
   out.push(`</svg>`);
-  return { svg: out.join("\n"), totalCommits };
+  return { svg: out.join("\n"), totalCommits, resting: effect?.resting.map((piece) => piece.box) ?? [] };
 }
 
 /**
@@ -196,6 +214,7 @@ export function adaptiveSvg(darkSvg, dark, light) {
     [dark.border, light.border],
     [cellStroke(dark), cellStroke(light)],
     ...dark.levels.map((color, i) => [color, light.levels[i]]),
+    ...(dark.decor ?? []).map((color, i) => [color, light.decor[i]]),
   ];
   const swaps = pairs
     .filter(([from], i) => pairs.findIndex(([f]) => f === from) === i)

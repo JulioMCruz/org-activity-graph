@@ -1,6 +1,8 @@
 // Surface colors follow GitHub's Primer tokens so the graph sits naturally on
 // a profile page; the five activity colors come from the chosen palette.
 
+import { EFFECT_COLORS } from "./effects.mjs";
+
 export const SURFACES = {
   dark: {
     background: "#0d1117",
@@ -99,11 +101,12 @@ function parseColors(value) {
 }
 
 export function resolveTheme(mode, { palette = "github", colorsDark = "", colorsLight = "", todayKey = new Date().toISOString().slice(0, 10) } = {}) {
-  const base = PALETTES[palette === "seasonal" ? seasonFor(todayKey) : palette];
+  const name = palette === "seasonal" ? seasonFor(todayKey) : palette;
+  const base = PALETTES[name];
   if (!base && !(colorsDark && colorsLight)) {
     throw new Error(`Unknown palette "${palette}". Use seasonal, ${Object.keys(PALETTES).join(", ")}, or set both custom color lists.`);
   }
   const custom = mode === "dark" ? colorsDark : colorsLight;
   const levels = custom ? parseColors(custom) : base[mode];
-  return { ...SURFACES[mode], levels };
+  return { ...SURFACES[mode], levels, season: name, decor: EFFECT_COLORS[name]?.[mode] ?? [] };
 }

@@ -56,6 +56,10 @@ inputs:
     description: Light up the graph week by week when it loads, using CSS only. Viewers who prefer reduced motion see it complete right away.
     required: false
     default: "false"
+  effects:
+    description: Add the season's decoration, for the seasonal palettes. Falling leaves, snow, petals and more play when the graph loads, and a few pieces stay in the empty space around the squares.
+    required: false
+    default: "false"
   colors-dark:
     description: Five comma-separated colors for the dark variant, from no activity to most activity.
     required: false

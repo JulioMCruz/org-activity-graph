@@ -26,6 +26,8 @@ jobs:
           # palette: seasonal
           # Light up the year week by week when the graph loads.
           # animate: true
+          # Snow, falling leaves, pumpkins and more, for the seasonal palettes.
+          # effects: true
           # To count private repositories too, store a read-only token as a
           # secret and uncomment these two lines. Only daily totals are shown.
           # token: ${{ secrets.ORG_ACTIVITY_TOKEN }}

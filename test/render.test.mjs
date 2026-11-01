@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { buildCalendar } from "../src/calendar.mjs";
 import { adaptiveSvg, formatTitle, monthLabels, renderSvg, revealCss } from "../src/render.mjs";
+import { EFFECT_COLORS, hasEffect } from "../src/effects.mjs";
 import { PALETTES, resolveTheme, seasonFor } from "../src/themes.mjs";
 
 const calendar = buildCalendar(new Map([["2026-10-20", 3], ["2026-09-01", 1]]), "2026-10-25");
@@ -140,6 +141,98 @@ test("the adaptive file keeps the reveal", () => {
   const adaptive = adaptiveSvg(svg, dark, light);
   assert.match(adaptive, /@keyframes pop/);
   assert.match(adaptive, /@media \(prefers-color-scheme: light\)/);
+});
+
+const SEASONS = ["spring", "summer", "autumn", "halloween", "winter", "christmas", "newyear"];
+const decorated = (palette, mode = "dark", extra = {}) =>
+  renderSvg({
+    calendar,
+    strips: [
+      { name: "web-app", countsByDay: new Map([["2026-10-20", 3]]) },
+      { name: "api", countsByDay: new Map([["2026-09-01", 1]]) },
+    ],
+    theme: resolveTheme(mode, { palette }),
+    meta: { title: "7,686 commits in the last year across 109 repositories", org: "o", updatedKey: "2026-10-25" },
+    effects: true,
+    ...extra,
+  });
+
+/** Everything on the graph that carries data: squares, labels and numbers. */
+function dataBoxes(svg) {
+  const squares = [...svg.matchAll(/<rect(?: class="[^"]*")? x="(\d+)" y="(\d+)" width="10" height="10"/g)]
+    .map(([, x, y]) => ({ x: Number(x), y: Number(y), w: 10, h: 10 }));
+  const labels = [...svg.matchAll(/<text(?: class="[^"]*")? x="(\d+)" y="(\d+)"(?: text-anchor="(\w+)")?>([^<]*)</g)]
+    .map(([, x, y, anchor, text]) => {
+      const w = text.length * 7.6;
+      return { x: anchor === "end" ? Number(x) - w : Number(x), y: Number(y) - 12, w, h: 15 };
+    });
+  return [...squares, ...labels];
+}
+
+const touching = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+test("every seasonal palette has an effect and the others have none", () => {
+  for (const season of SEASONS) assert.ok(hasEffect(season), season);
+  for (const palette of ["github", "ember"]) {
+    const options = { calendar, theme: resolveTheme("dark", { palette }), meta: { title: "t", org: "o", updatedKey: "2026-10-25" } };
+    assert.equal(renderSvg({ ...options, effects: true }).svg, renderSvg(options).svg);
+  }
+  assert.equal(resolveTheme("dark", { palette: "seasonal", todayKey: "2026-12-25" }).season, "christmas");
+});
+
+test("resting pieces never touch a square or a label", () => {
+  for (const season of SEASONS) {
+    const { svg, resting } = decorated(season);
+    const data = dataBoxes(svg);
+    assert.ok(data.length > 370);
+    assert.ok(resting.length > 0, season);
+    for (const piece of resting) {
+      const hit = data.find((box) => touching(piece, box));
+      assert.equal(hit, undefined, `${season}: ${JSON.stringify(piece)} touches ${JSON.stringify(hit)}`);
+    }
+  }
+});
+
+test("a long title keeps its space", () => {
+  const title = "A very long header that runs almost all the way across the whole width of the graph";
+  for (const season of SEASONS) {
+    const { resting } = decorated(season, "dark", {
+      meta: { title, org: "o", updatedKey: "2026-10-25" },
+    });
+    const end = 1 + title.length * 7.6;
+    assert.equal(resting.filter((p) => p.y < 24 && p.x < end).length, 0, season);
+  }
+});
+
+test("effects stay self-contained and respect reduced motion", () => {
+  for (const season of SEASONS) {
+    const { svg } = decorated(season);
+    assert.doesNotMatch(svg, /<script|<image|<foreignObject|href="http/);
+    assert.match(svg, /<g class="fx">/);
+    assert.match(svg, /prefers-reduced-motion:reduce\)\{\.fx\{display:none\}/);
+    assert.equal(svg, decorated(season).svg, "same input, same file");
+  }
+});
+
+test("moving pieces end outside the frame", () => {
+  const { svg } = decorated("winter");
+  const height = Number(svg.match(/ height="(\d+)" viewBox/)[1]);
+  assert.match(svg, new RegExp(`@keyframes drop\\{from\\{transform:translateY\\(-16px\\)\\}to\\{transform:translateY\\(${height + 16}px\\)`));
+  assert.match(svg, /@keyframes spark\{.*?to\{opacity:0;/);
+});
+
+test("the adaptive file swaps decoration colors too", () => {
+  for (const season of SEASONS) {
+    const dark = resolveTheme("dark", { palette: season });
+    const light = resolveTheme("light", { palette: season });
+    assert.equal(dark.decor.length, light.decor.length, season);
+    dark.decor.forEach((color, i) => {
+      const level = dark.levels.indexOf(color);
+      if (level >= 0) assert.equal(light.levels[level], light.decor[i], `${season} ${color}`);
+    });
+    const adaptive = adaptiveSvg(decorated(season).svg, dark, light);
+    assert.ok(adaptive.includes(`[fill="${EFFECT_COLORS[season].dark[0]}"]{fill:${EFFECT_COLORS[season].light[0]}}`), season);
+  }
 });
 
 test("each square carries its count for hovering", () => {
