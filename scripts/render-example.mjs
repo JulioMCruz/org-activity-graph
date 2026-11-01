@@ -1,5 +1,5 @@
-// Renders docs/example-dark.svg and docs/example-light.svg from synthetic,
-// deterministic data, so the README preview never depends on a live org.
+// Renders docs/example-dark.svg, docs/example-light.svg and the season gallery
+// from synthetic, deterministic data, so the README never depends on a live org.
 
 import { mkdirSync, writeFileSync } from "node:fs";
 
@@ -53,3 +53,20 @@ for (const mode of ["dark", "light"]) {
 }
 writeFileSync("docs/example.svg", adaptiveSvg(rendered.dark, resolveTheme("dark"), resolveTheme("light")));
 console.log("Wrote docs/example.svg");
+
+// One file per season for the gallery, with its colors, reveal and decoration.
+// They follow the viewer's theme, and one line each keeps the diffs small.
+mkdirSync("docs/seasons", { recursive: true });
+for (const season of ["autumn", "halloween", "winter", "christmas", "newyear", "spring", "summer"]) {
+  const options = { palette: season };
+  const { svg } = renderSvg({
+    calendar,
+    theme: resolveTheme("dark", options),
+    meta: { title: formatTitle("{commits} commits in the last year", commits, 0), org: "example-org", updatedKey: todayKey },
+    animate: true,
+    effects: true,
+  });
+  const adaptive = adaptiveSvg(svg, resolveTheme("dark", options), resolveTheme("light", options));
+  writeFileSync(`docs/seasons/${season}.svg`, adaptive.replace(/\n/g, ""));
+  console.log(`Wrote docs/seasons/${season}.svg`);
+}
