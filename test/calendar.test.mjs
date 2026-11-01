@@ -37,3 +37,9 @@ test("weekly totals add up each grid week", () => {
   const totals = weeklyTotals(counts, weeks);
   assert.equal(totals.reduce((s, n) => s + n, 0), 5);
 });
+
+test("a level from GitHub stays on its day and others are left to the quartiles", () => {
+  const { days } = buildCalendar(new Map([["2026-10-20", 3]]), "2026-10-25", new Map([["2026-10-20", 4]]));
+  assert.equal(days.find((d) => d.key === "2026-10-20").level, 4);
+  assert.equal("level" in days.find((d) => d.key === "2026-10-21"), false);
+});

@@ -261,3 +261,15 @@ test("the adaptive file swaps every dark color under a light scheme", () => {
   assert.ok(adaptive.includes(`[stroke="${dark.border}"]{stroke:${light.border}}`));
   assert.equal(adaptive.match(/<\/style>/g).length, 1);
 });
+
+test("a person's graph takes GitHub's shade and speaks of contributions", () => {
+  const person = buildCalendar(new Map([["2026-10-20", 3], ["2026-10-21", 9]]), "2026-10-25", new Map([["2026-10-20", 4], ["2026-10-21", 1]]));
+  const theme = resolveTheme("dark");
+  const { svg } = renderSvg({ calendar: person, theme, meta: { title: "t", org: "octocat", updatedKey: "2026-10-25", unit: "contribution" } });
+  assert.match(svg, new RegExp(`fill="${theme.levels[4]}"><title>3 contributions on Oct 20, 2026`));
+  assert.match(svg, new RegExp(`fill="${theme.levels[1]}"><title>9 contributions on Oct 21, 2026`));
+  assert.match(svg, /<title>No contributions on Oct 22, 2026/);
+  assert.match(svg, /Daily contributions by octocat from/);
+  assert.equal(formatTitle("{contributions} contributions in the last year", 1, 0), "1 contribution in the last year");
+  assert.equal(formatTitle("{contributions} contributions in the last year", 14901, 0), "14,901 contributions in the last year");
+});

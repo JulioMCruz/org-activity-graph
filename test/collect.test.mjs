@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { collectActivity, isExcludedAuthor } from "../src/collect.mjs";
+import { collectActivity, collectUserActivity, isExcludedAuthor, ownerKind } from "../src/collect.mjs";
 
 test("bots and listed authors are left out", () => {
   const excluded = new Set(["ci-user"]);
@@ -118,4 +118,37 @@ test("private work adds up in one unnamed total for the private strip", async ()
   assert.equal(sum(total), 3);
   assert.equal(sum(privateTotal), 2);
   assert.deepEqual([...byRepo.keys()], ["web"]);
+});
+
+test("the owner's kind comes from its login, and an unknown login says so", async () => {
+  const graphql = async (_query, { login }) => ({
+    repositoryOwner: login === "missing" ? null : { __typename: login === "octocat" ? "User" : "Organization" },
+  });
+  assert.equal(await ownerKind(graphql, "octocat"), "User");
+  assert.equal(await ownerKind(graphql, "github"), "Organization");
+  await assert.rejects(ownerKind(graphql, "missing"), /No user or organization named missing/);
+});
+
+test("a person's year keeps GitHub's total and shades", async () => {
+  const day = (date, contributionCount, contributionLevel) => ({ date, contributionCount, contributionLevel });
+  const graphql = async () => ({
+    user: {
+      contributionsCollection: {
+        contributionCalendar: {
+          totalContributions: 90,
+          weeks: [
+            { contributionDays: [day("2026-10-25", 0, "NONE"), day("2026-10-26", 3, "FOURTH_QUARTILE")] },
+            { contributionDays: [day("2026-11-01", 7, "FIRST_QUARTILE")] },
+          ],
+        },
+      },
+    },
+  });
+  const activity = await collectUserActivity(graphql, "octocat");
+  assert.equal(activity.totalContributions, 90);
+  assert.equal(activity.lastDay, "2026-11-01");
+  assert.deepEqual([...activity.total], [["2026-10-26", 3], ["2026-11-01", 7]]);
+  assert.equal(activity.levels.get("2026-10-25"), 0);
+  assert.equal(activity.levels.get("2026-10-26"), 4);
+  assert.equal(activity.levels.get("2026-11-01"), 1);
 });

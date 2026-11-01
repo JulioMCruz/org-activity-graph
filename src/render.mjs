@@ -51,8 +51,9 @@ export function monthLabels(weeks) {
 export function formatTitle(template, commits, repos) {
   let text = template
     .replace("{commits}", commits.toLocaleString("en-US"))
+    .replace("{contributions}", commits.toLocaleString("en-US"))
     .replace("{repos}", repos.toLocaleString("en-US"));
-  if (commits === 1) text = text.replace(/\bcommits\b/, "commit");
+  if (commits === 1) text = text.replace(/\b(commit|contribution)s\b/, "$1");
   if (repos === 1) text = text.replace(/\brepositories\b/, "repository");
   return text;
 }
@@ -67,9 +68,9 @@ function truncate(text, max) {
 }
 
 /** Hover text for a square: "No commits", "1 commit", "12 commits". */
-export function commitCount(n) {
-  if (n === 0) return "No commits";
-  return `${n.toLocaleString("en-US")} ${n === 1 ? "commit" : "commits"}`;
+export function commitCount(n, unit = "commit") {
+  if (n === 0) return `No ${unit}s`;
+  return `${n.toLocaleString("en-US")} ${n === 1 ? unit : `${unit}s`}`;
 }
 
 /** Faint outline GitHub draws around each square. */
@@ -97,12 +98,14 @@ export function revealCss(weekCount) {
  * @param calendar  result of buildCalendar for the org totals
  * @param strips    [{ name, countsByDay }] in display order
  * @param theme     resolveTheme(...)
- * @param meta      { title, org, updatedKey }
+ * @param meta      { title, org, updatedKey, unit }, unit "commit" by default or "contribution" for a person
  * @param animate   light up the squares week by week when the graph loads
  * @param effects   add the season's decoration, for palettes that have one
  */
 export function renderSvg({ calendar, strips = [], theme, meta, animate = false, effects = false }) {
   const { weeks, days } = calendar;
+  const unit = meta.unit ?? "commit";
+  const subject = unit === "commit" ? `Daily commits across the ${meta.org} organization` : `Daily contributions by ${meta.org}`;
   const totalCommits = days.reduce((s, d) => s + d.count, 0);
   const thresholds = levelThresholds(days.map((d) => d.count));
   const gridW = weeks.length * STEP - (STEP - CELL);
@@ -141,7 +144,7 @@ export function renderSvg({ calendar, strips = [], theme, meta, animate = false,
   out.push(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="t d">`,
     `<title id="t">${esc(meta.title)}</title>`,
-    `<desc id="d">${esc(`Daily commits across the ${meta.org} organization from ${formatDay(calendar.startKey)} to ${formatDay(calendar.endKey)}.`)}</desc>`,
+    `<desc id="d">${esc(`${subject} from ${formatDay(calendar.startKey)} to ${formatDay(calendar.endKey)}.`)}</desc>`,
     `<style>text{font-family:${FONT};fill:${theme.muted};font-size:12px}.title{fill:${theme.text};font-size:16px}.repo{fill:${theme.text}}${animate ? revealCss(weeks.length) : ""}${effect?.css ?? ""}</style>`,
     `<rect width="${width}" height="${height}" fill="${theme.background}"/>`,
     `<text class="title" x="1" y="20">${esc(meta.title)}</text>`,
@@ -158,9 +161,9 @@ export function renderSvg({ calendar, strips = [], theme, meta, animate = false,
   out.push(`<g stroke="${stroke}" stroke-width="1">`);
   weeks.forEach((week, col) => {
     for (const day of week) {
-      const fill = theme.levels[levelFor(day.count, thresholds)];
+      const fill = theme.levels[day.level ?? levelFor(day.count, thresholds)];
       out.push(
-        `<rect${cellClass(col)} x="${gridX + col * STEP}" y="${gridY + day.weekday * STEP}" width="${CELL}" height="${CELL}" rx="${RADIUS}" fill="${fill}"><title>${esc(`${commitCount(day.count)} on ${formatDay(day.key)}`)}</title></rect>`,
+        `<rect${cellClass(col)} x="${gridX + col * STEP}" y="${gridY + day.weekday * STEP}" width="${CELL}" height="${CELL}" rx="${RADIUS}" fill="${fill}"><title>${esc(`${commitCount(day.count, unit)} on ${formatDay(day.key)}`)}</title></rect>`,
       );
     }
   });

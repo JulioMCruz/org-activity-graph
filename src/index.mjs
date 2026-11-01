@@ -1,14 +1,17 @@
 // GitHub Action entry point. Reads inputs from the INPUT_* environment the
-// runner provides, collects the organization's commits, and writes a dark and
-// a light SVG.
+// runner provides, collects the commits of an organization or the contributions
+// of a person, and writes a dark and a light SVG.
 
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { buildCalendar, dayKey } from "./calendar.mjs";
-import { collectActivity, makeClient } from "./collect.mjs";
+import { collectActivity, collectUserActivity, makeClient, ownerKind } from "./collect.mjs";
 import { adaptiveSvg, formatTitle, renderSvg } from "./render.mjs";
 import { resolveTheme } from "./themes.mjs";
+
+const ORG_TITLE = "{commits} commits in the last year across {repos} repositories";
+const USER_TITLE = "{contributions} contributions in the last year";
 
 function input(name, fallback = "") {
   const value = process.env[`INPUT_${name.toUpperCase()}`];
@@ -31,8 +34,8 @@ function setOutput(name, value) {
 }
 
 export async function run() {
-  const org = input("org");
-  if (!org) throw new Error("The org input is required.");
+  const org = input("org", process.env.GITHUB_REPOSITORY_OWNER);
+  if (!org) throw new Error("Set the org input to a user or organization login.");
   const token = input("token");
   if (!token) throw new Error("A token is required to call the GitHub API.");
   const timeZone = input("timezone", "UTC");
@@ -43,19 +46,22 @@ export async function run() {
   const stripRepos = list("repos");
 
   const graphql = makeClient(token);
-  const { total, byRepo, privateTotal, activeRepos } = await collectActivity(graphql, {
-    org,
-    since,
-    timeZone,
-    includePrivate: flag("include-private"),
-    includeForks: flag("include-forks"),
-    includeArchived: flag("include-archived"),
-    excluded: new Set(list("exclude-authors").map((v) => v.toLowerCase())),
-    excludedRepos: new Set(list("exclude-repos").map((v) => v.toLowerCase())),
-    stripRepos,
-  });
+  const isUser = (await ownerKind(graphql, org)) === "User";
+  const { total, levels, lastDay, totalContributions, byRepo, privateTotal, activeRepos } = isUser
+    ? await collectUserActivity(graphql, org)
+    : await collectActivity(graphql, {
+        org,
+        since,
+        timeZone,
+        includePrivate: flag("include-private"),
+        includeForks: flag("include-forks"),
+        includeArchived: flag("include-archived"),
+        excluded: new Set(list("exclude-authors").map((v) => v.toLowerCase())),
+        excludedRepos: new Set(list("exclude-repos").map((v) => v.toLowerCase())),
+        stripRepos,
+      });
 
-  const calendar = buildCalendar(total, todayKey);
+  const calendar = buildCalendar(total, lastDay ?? todayKey, levels);
   const strips = stripRepos
     .map((name) => [...byRepo.entries()].find(([n]) => n.toLowerCase() === name.toLowerCase()))
     .filter(Boolean)
@@ -63,12 +69,8 @@ export async function run() {
   if (flag("private-strip") && flag("include-private")) {
     strips.push({ name: "Private repositories", countsByDay: privateTotal });
   }
-  const inWindow = calendar.days.reduce((s, d) => s + d.count, 0);
-  const title = formatTitle(
-    input("title", "{commits} commits in the last year across {repos} repositories"),
-    inWindow,
-    activeRepos,
-  );
+  const inWindow = totalContributions ?? calendar.days.reduce((s, d) => s + d.count, 0);
+  const title = formatTitle(input("title", isUser ? USER_TITLE : ORG_TITLE), inWindow, activeRepos);
 
   const outputDir = input("output-dir", "dist");
   const fileName = input("file-name", "activity");
@@ -85,7 +87,7 @@ export async function run() {
       calendar,
       strips,
       theme: resolveTheme(mode, themeOptions),
-      meta: { title, org, updatedKey: todayKey },
+      meta: { title, org, updatedKey: todayKey, unit: isUser ? "contribution" : "commit" },
       animate: flag("animate"),
       effects: flag("effects"),
     });

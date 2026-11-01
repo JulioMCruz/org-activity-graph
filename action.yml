@@ -6,8 +6,9 @@ branding:
   color: green
 inputs:
   org:
-    description: Organization login, for example PerkOS-xyz.
-    required: true
+    description: User or organization login. Defaults to the owner of the repository running the workflow.
+    required: false
+    default: ${{ github.repository_owner }}
   token:
     description: Token used to read repositories and commits. The default token reads public repositories.
     required: false
@@ -73,14 +74,14 @@ inputs:
     required: false
     default: UTC
   title:
-    description: Header text. {commits} and {repos} are replaced with the totals.
+    description: Header text. {commits}, {contributions} and {repos} are replaced with the totals. Leave empty for the default of a user or an organization.
     required: false
-    default: "{commits} commits in the last year across {repos} repositories"
+    default: ""
 outputs:
   total-commits:
-    description: Commits counted in the last year.
+    description: Commits counted in the last year, or contributions for a user.
   repositories:
-    description: Repositories with at least one counted commit.
+    description: Repositories with at least one counted commit. Always 0 for a user.
 runs:
   using: node24
   main: src/index.mjs

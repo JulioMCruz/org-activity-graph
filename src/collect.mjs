@@ -1,5 +1,6 @@
-// Read an organization's repositories and the commits on each default branch
-// through the GitHub GraphQL API. No dependencies: Node 20 ships fetch.
+// Read an organization's repositories and the commits on each default branch,
+// or a person's contribution calendar, through the GitHub GraphQL API. No
+// dependencies: Node 20 ships fetch.
 
 import { dayKey } from "./calendar.mjs";
 
@@ -31,6 +32,25 @@ query($owner: String!, $name: String!, $since: GitTimestamp!, $after: String) {
   }
 }`;
 
+const OWNER_QUERY = `
+query($login: String!) {
+  repositoryOwner(login: $login) { __typename }
+}`;
+
+const CALENDAR_QUERY = `
+query($login: String!) {
+  user(login: $login) {
+    contributionsCollection {
+      contributionCalendar {
+        totalContributions
+        weeks { contributionDays { date contributionCount contributionLevel } }
+      }
+    }
+  }
+}`;
+
+const CALENDAR_LEVELS = ["NONE", "FIRST_QUARTILE", "SECOND_QUARTILE", "THIRD_QUARTILE", "FOURTH_QUARTILE"];
+
 export function makeClient(token, fetchImpl = globalThis.fetch) {
   return async function graphql(query, variables) {
     const res = await fetchImpl(API, {
@@ -47,6 +67,13 @@ export function makeClient(token, fetchImpl = globalThis.fetch) {
     if (body.errors?.length) throw new Error(`GitHub GraphQL: ${body.errors.map((e) => e.message).join("; ")}`);
     return body.data;
   };
+}
+
+/** "User" or "Organization": the action draws either from the same login input. */
+export async function ownerKind(graphql, login) {
+  const { repositoryOwner } = await graphql(OWNER_QUERY, { login });
+  if (!repositoryOwner) throw new Error(`No user or organization named ${login} was found on GitHub.`);
+  return repositoryOwner.__typename;
 }
 
 /** True for automation accounts and any login or name the caller listed. */
@@ -143,4 +170,29 @@ export async function collectActivity(graphql, options) {
     if (!repo.isPrivate && wanted.has(repo.name.toLowerCase())) byRepo.set(repo.name, counts);
   }
   return { total, byRepo, privateTotal, activeRepos };
+}
+
+/**
+ * A person's year from GitHub's own contribution calendar, so the shades and
+ * the total match their profile. One query, with no repositories to walk.
+ */
+export async function collectUserActivity(graphql, login) {
+  const { user } = await graphql(CALENDAR_QUERY, { login });
+  const { totalContributions, weeks } = user.contributionsCollection.contributionCalendar;
+  const days = weeks.flatMap((week) => week.contributionDays);
+  const total = new Map();
+  const levels = new Map();
+  for (const day of days) {
+    if (day.contributionCount > 0) total.set(day.date, day.contributionCount);
+    levels.set(day.date, Math.max(0, CALENDAR_LEVELS.indexOf(day.contributionLevel)));
+  }
+  return {
+    total,
+    levels,
+    lastDay: days.at(-1)?.date,
+    totalContributions,
+    byRepo: new Map(),
+    privateTotal: new Map(),
+    activeRepos: 0,
+  };
 }
