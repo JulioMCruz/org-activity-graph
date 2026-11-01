@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { collectActivity, collectUserActivity, isExcludedAuthor, ownerKind } from "../src/collect.mjs";
+import { collectActivity, collectUserActivity, isExcludedAuthor, makeClient, ownerKind } from "../src/collect.mjs";
 
 test("bots and listed authors are left out", () => {
   const excluded = new Set(["ci-user"]);
@@ -151,4 +151,56 @@ test("a person's year keeps GitHub's total and shades", async () => {
   assert.equal(activity.levels.get("2026-10-25"), 0);
   assert.equal(activity.levels.get("2026-10-26"), 4);
   assert.equal(activity.levels.get("2026-11-01"), 1);
+});
+
+function fakeResponses(...responses) {
+  const waits = [];
+  let calls = 0;
+  const fetchImpl = async () => {
+    const next = responses[Math.min(calls, responses.length - 1)];
+    calls += 1;
+    if (next instanceof Error) throw next;
+    const { status = 200, retryAfter, json = {} } = next;
+    return {
+      ok: status < 400,
+      status,
+      headers: new Map(retryAfter ? [["retry-after", retryAfter]] : []),
+      json: async () => json,
+      text: async () => "body",
+    };
+  };
+  const wait = async (ms) => waits.push(ms);
+  return { fetchImpl, wait, waits, calls: () => calls };
+}
+
+test("temporary failures are retried with a growing wait", async () => {
+  const api = fakeResponses({ status: 502 }, new Error("socket hang up"), { json: { errors: [{ message: "This may be the result of a timeout" }] } }, { json: { data: { ok: true } } });
+  const graphql = makeClient("t", api.fetchImpl, api.wait);
+  assert.deepEqual(await graphql("q"), { ok: true });
+  assert.deepEqual(api.waits, [2000, 4000, 8000]);
+});
+
+test("a wait asked for by GitHub is honored, up to a minute", async () => {
+  const api = fakeResponses({ status: 403, retryAfter: "7" }, { status: 429, retryAfter: "900" }, { json: { data: {} } });
+  await makeClient("t", api.fetchImpl, api.wait)("q");
+  assert.deepEqual(api.waits, [7000, 60000]);
+});
+
+test("errors that will not go away fail at once with a clear message", async () => {
+  for (const [response, message] of [
+    [{ status: 401 }, /GitHub GraphQL 401/],
+    [{ status: 403 }, /GitHub GraphQL 403/],
+    [{ json: { errors: [{ type: "RATE_LIMITED", message: "API rate limit exceeded" }] } }, /rate limit was reached/],
+    [{ json: { errors: [{ message: "Could not resolve" }] } }, /Could not resolve/],
+  ]) {
+    const api = fakeResponses(response);
+    await assert.rejects(makeClient("t", api.fetchImpl, api.wait)("q"), message);
+    assert.equal(api.calls(), 1);
+  }
+});
+
+test("retries stop after three", async () => {
+  const api = fakeResponses({ status: 503 });
+  await assert.rejects(makeClient("t", api.fetchImpl, api.wait)("q"), /GitHub GraphQL 503/);
+  assert.equal(api.calls(), 4);
 });

@@ -51,21 +51,62 @@ query($login: String!) {
 
 const CALENDAR_LEVELS = ["NONE", "FIRST_QUARTILE", "SECOND_QUARTILE", "THIRD_QUARTILE", "FOURTH_QUARTILE"];
 
-export function makeClient(token, fetchImpl = globalThis.fetch) {
+const RETRIES = 3;
+const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
+const MAX_WAIT_MS = 60_000;
+
+function retryDelay(attempt, res) {
+  const seconds = Number(res?.headers?.get("retry-after"));
+  return seconds > 0 ? Math.min(seconds * 1000, MAX_WAIT_MS) : 2000 * 2 ** attempt;
+}
+
+function isTemporary(res) {
+  return RETRY_STATUS.has(res.status) || (res.status === 403 && Boolean(res.headers?.get("retry-after")));
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export function makeClient(token, fetchImpl = globalThis.fetch, wait = sleep) {
   return async function graphql(query, variables) {
-    const res = await fetchImpl(API, {
-      method: "POST",
-      headers: {
-        authorization: `bearer ${token}`,
-        "content-type": "application/json",
-        "user-agent": "org-activity-graph",
-      },
-      body: JSON.stringify({ query, variables }),
-    });
-    if (!res.ok) throw new Error(`GitHub GraphQL ${res.status}: ${(await res.text()).slice(0, 300)}`);
-    const body = await res.json();
-    if (body.errors?.length) throw new Error(`GitHub GraphQL: ${body.errors.map((e) => e.message).join("; ")}`);
-    return body.data;
+    for (let attempt = 0; ; attempt += 1) {
+      const canRetry = attempt < RETRIES;
+      let res;
+      try {
+        res = await fetchImpl(API, {
+          method: "POST",
+          headers: {
+            authorization: `bearer ${token}`,
+            "content-type": "application/json",
+            "user-agent": "org-activity-graph",
+          },
+          body: JSON.stringify({ query, variables }),
+        });
+      } catch (error) {
+        if (!canRetry) throw error;
+        await wait(retryDelay(attempt));
+        continue;
+      }
+      if (!res.ok) {
+        if (canRetry && isTemporary(res)) {
+          await wait(retryDelay(attempt, res));
+          continue;
+        }
+        throw new Error(`GitHub GraphQL ${res.status}: ${(await res.text()).slice(0, 300)}`);
+      }
+      const body = await res.json();
+      if (body.errors?.some((e) => e.type === "RATE_LIMITED")) {
+        throw new Error("GitHub's rate limit was reached. Try again in an hour, or pass a personal access token as token.");
+      }
+      if (body.errors?.length) {
+        // Long commit histories sometimes time out on GitHub's side.
+        if (canRetry && body.errors.some((e) => /timeout|timed out/i.test(e.message))) {
+          await wait(retryDelay(attempt));
+          continue;
+        }
+        throw new Error(`GitHub GraphQL: ${body.errors.map((e) => e.message).join("; ")}`);
+      }
+      return body.data;
+    }
   };
 }
 
