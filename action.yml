@@ -1,13 +1,14 @@
-name: Org Activity Graph
-description: Draw a contribution-style activity graph for a whole GitHub organization, for its profile README.
+name: Seasonal Activity Graph
+description: Seasonal, animated contribution graph for your GitHub profile or your whole organization.
 author: Julio M Cruz
 branding:
   icon: grid
   color: green
 inputs:
   org:
-    description: Organization login, for example PerkOS-xyz.
-    required: true
+    description: User or organization login. Defaults to the owner of the repository running the workflow.
+    required: false
+    default: ${{ github.repository_owner }}
   token:
     description: Token used to read repositories and commits. The default token reads public repositories.
     required: false
@@ -68,19 +69,31 @@ inputs:
     description: Five comma-separated colors for the light variant, from no activity to most activity.
     required: false
     default: ""
+  publish:
+    description: Publish the SVG files to a branch of this repository, so a README can show them. Needs contents write permission.
+    required: false
+    default: "false"
+  publish-branch:
+    description: Branch that receives the SVG files. It keeps a single commit, so the default branch stays free of daily commits.
+    required: false
+    default: activity
+  publish-token:
+    description: Token used to publish. It is separate from token, which only needs to read.
+    required: false
+    default: ${{ github.token }}
   timezone:
     description: IANA time zone used to group commits by day, for example America/New_York.
     required: false
     default: UTC
   title:
-    description: Header text. {commits} and {repos} are replaced with the totals.
+    description: Header text. {commits}, {contributions} and {repos} are replaced with the totals. Leave empty for the default of a user or an organization.
     required: false
-    default: "{commits} commits in the last year across {repos} repositories"
+    default: ""
 outputs:
   total-commits:
-    description: Commits counted in the last year.
+    description: Commits counted in the last year, or contributions for a user.
   repositories:
-    description: Repositories with at least one counted commit.
+    description: Repositories with at least one counted commit. Always 0 for a user.
 runs:
   using: node24
   main: src/index.mjs

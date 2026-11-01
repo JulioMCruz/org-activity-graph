@@ -29,9 +29,10 @@ function utcDateToKey(date) {
 /**
  * Build the week grid ending on `todayKey` (YYYY-MM-DD).
  * Returns { weeks: [[{ key, count }...7 or fewer]...], days: [...] } where each
- * week holds Sunday..Saturday and the last week stops at today.
+ * week holds Sunday..Saturday and the last week stops at today. `levelsByDay`
+ * fixes a day's shade when GitHub already decided it.
  */
-export function buildCalendar(countsByDay, todayKey) {
+export function buildCalendar(countsByDay, todayKey, levelsByDay = null) {
   const today = keyToUtcDate(todayKey);
   const firstDay = new Date(today.getTime() - 52 * 7 * DAY_MS);
   const start = new Date(firstDay.getTime() - firstDay.getUTCDay() * DAY_MS);
@@ -42,6 +43,7 @@ export function buildCalendar(countsByDay, todayKey) {
     const date = new Date(t);
     const key = utcDateToKey(date);
     const day = { key, weekday: date.getUTCDay(), count: countsByDay.get(key) ?? 0 };
+    if (levelsByDay?.has(key)) day.level = levelsByDay.get(key);
     if (day.weekday === 0 || weeks.length === 0) weeks.push([]);
     weeks[weeks.length - 1].push(day);
     days.push(day);

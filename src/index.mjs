@@ -1,14 +1,20 @@
 // GitHub Action entry point. Reads inputs from the INPUT_* environment the
-// runner provides, collects the organization's commits, and writes a dark and
-// a light SVG.
+// runner provides, collects the commits of an organization or the contributions
+// of a person, and writes a dark and a light SVG.
 
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { buildCalendar, dayKey } from "./calendar.mjs";
-import { collectActivity, makeClient } from "./collect.mjs";
+import { collectActivity, collectUserActivity, makeClient, ownerKind } from "./collect.mjs";
+import { publishBranch } from "./publish.mjs";
 import { adaptiveSvg, formatTitle, renderSvg } from "./render.mjs";
+import { runSummary } from "./summary.mjs";
 import { resolveTheme } from "./themes.mjs";
+import { settingWarnings } from "./warnings.mjs";
+
+const ORG_TITLE = "{commits} commits in the last year across {repos} repositories";
+const USER_TITLE = "{contributions} contributions in the last year";
 
 function input(name, fallback = "") {
   const value = process.env[`INPUT_${name.toUpperCase()}`];
@@ -26,13 +32,20 @@ function list(name) {
     .filter(Boolean);
 }
 
+// Inputs a user can turn on, for the warnings about the ones that do nothing.
+function inputsInUse() {
+  const flags = ["effects", "include-private", "private-strip", "include-forks", "include-archived"].filter(flag);
+  const lists = ["repos", "exclude-authors", "exclude-repos"].filter((name) => input(name));
+  return new Set([...flags, ...lists]);
+}
+
 function setOutput(name, value) {
   if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${value}\n`);
 }
 
 export async function run() {
-  const org = input("org");
-  if (!org) throw new Error("The org input is required.");
+  const org = input("org", process.env.GITHUB_REPOSITORY_OWNER);
+  if (!org) throw new Error("Set the org input to a user or organization login.");
   const token = input("token");
   if (!token) throw new Error("A token is required to call the GitHub API.");
   const timeZone = input("timezone", "UTC");
@@ -43,19 +56,22 @@ export async function run() {
   const stripRepos = list("repos");
 
   const graphql = makeClient(token);
-  const { total, byRepo, privateTotal, activeRepos } = await collectActivity(graphql, {
-    org,
-    since,
-    timeZone,
-    includePrivate: flag("include-private"),
-    includeForks: flag("include-forks"),
-    includeArchived: flag("include-archived"),
-    excluded: new Set(list("exclude-authors").map((v) => v.toLowerCase())),
-    excludedRepos: new Set(list("exclude-repos").map((v) => v.toLowerCase())),
-    stripRepos,
-  });
+  const isUser = (await ownerKind(graphql, org)) === "User";
+  const { total, levels, lastDay, totalContributions, byRepo, privateTotal, activeRepos, privateRepos } = isUser
+    ? await collectUserActivity(graphql, org)
+    : await collectActivity(graphql, {
+        org,
+        since,
+        timeZone,
+        includePrivate: flag("include-private"),
+        includeForks: flag("include-forks"),
+        includeArchived: flag("include-archived"),
+        excluded: new Set(list("exclude-authors").map((v) => v.toLowerCase())),
+        excludedRepos: new Set(list("exclude-repos").map((v) => v.toLowerCase())),
+        stripRepos,
+      });
 
-  const calendar = buildCalendar(total, todayKey);
+  const calendar = buildCalendar(total, lastDay ?? todayKey, levels);
   const strips = stripRepos
     .map((name) => [...byRepo.entries()].find(([n]) => n.toLowerCase() === name.toLowerCase()))
     .filter(Boolean)
@@ -63,12 +79,8 @@ export async function run() {
   if (flag("private-strip") && flag("include-private")) {
     strips.push({ name: "Private repositories", countsByDay: privateTotal });
   }
-  const inWindow = calendar.days.reduce((s, d) => s + d.count, 0);
-  const title = formatTitle(
-    input("title", "{commits} commits in the last year across {repos} repositories"),
-    inWindow,
-    activeRepos,
-  );
+  const inWindow = totalContributions ?? calendar.days.reduce((s, d) => s + d.count, 0);
+  const title = formatTitle(input("title", isUser ? USER_TITLE : ORG_TITLE), inWindow, activeRepos);
 
   const outputDir = input("output-dir", "dist");
   const fileName = input("file-name", "activity");
@@ -85,7 +97,7 @@ export async function run() {
       calendar,
       strips,
       theme: resolveTheme(mode, themeOptions),
-      meta: { title, org, updatedKey: todayKey },
+      meta: { title, org, updatedKey: todayKey, unit: isUser ? "contribution" : "commit" },
       animate: flag("animate"),
       effects: flag("effects"),
     });
@@ -102,6 +114,32 @@ export async function run() {
   console.log(`Wrote ${adaptivePath}`);
 
   console.log(`${title}. Strips: ${strips.map((s) => s.name).join(", ") || "none"}.`);
+  const warnings = settingWarnings({
+    isUser,
+    set: inputsInUse(),
+    stripRepos,
+    strips: strips.map((s) => s.name),
+    season: resolveTheme("dark", themeOptions).season,
+    privateRepos,
+  });
+  for (const warning of warnings) console.log(`::warning::${warning}`);
+
+  const repository = process.env.GITHUB_REPOSITORY;
+  const branch = flag("publish") ? input("publish-branch", "activity") : undefined;
+  if (branch) {
+    if (!repository) throw new Error("publish only works inside a GitHub Actions run.");
+    publishBranch({
+      dir: outputDir,
+      branch,
+      token: input("publish-token", token),
+      repository,
+      serverUrl: process.env.GITHUB_SERVER_URL,
+    });
+    console.log(`Published to the ${branch} branch. The run's summary has the lines for your README.`);
+  }
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    appendFileSync(process.env.GITHUB_STEP_SUMMARY, runSummary({ title, repository, branch, fileName, org }));
+  }
   setOutput("total-commits", String(inWindow));
   setOutput("repositories", String(activeRepos));
 }

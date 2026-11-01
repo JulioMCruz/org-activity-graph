@@ -1,7 +1,7 @@
 {
   "name": "org-activity-graph",
   "version": "1.0.0",
-  "description": "GitHub Action that draws a contribution-style activity graph for a whole GitHub organization.",
+  "description": "GitHub Action that draws a seasonal, animated contribution graph for a GitHub profile or a whole organization.",
   "type": "module",
   "license": "MIT",
   "author": "Julio M Cruz",

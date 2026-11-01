@@ -1,5 +1,6 @@
-// Read an organization's repositories and the commits on each default branch
-// through the GitHub GraphQL API. No dependencies: Node 20 ships fetch.
+// Read an organization's repositories and the commits on each default branch,
+// or a person's contribution calendar, through the GitHub GraphQL API. No
+// dependencies: Node 20 ships fetch.
 
 import { dayKey } from "./calendar.mjs";
 
@@ -31,22 +32,89 @@ query($owner: String!, $name: String!, $since: GitTimestamp!, $after: String) {
   }
 }`;
 
-export function makeClient(token, fetchImpl = globalThis.fetch) {
+const OWNER_QUERY = `
+query($login: String!) {
+  repositoryOwner(login: $login) { __typename }
+}`;
+
+const CALENDAR_QUERY = `
+query($login: String!) {
+  user(login: $login) {
+    contributionsCollection {
+      contributionCalendar {
+        totalContributions
+        weeks { contributionDays { date contributionCount contributionLevel } }
+      }
+    }
+  }
+}`;
+
+const CALENDAR_LEVELS = ["NONE", "FIRST_QUARTILE", "SECOND_QUARTILE", "THIRD_QUARTILE", "FOURTH_QUARTILE"];
+
+const RETRIES = 3;
+const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
+const MAX_WAIT_MS = 60_000;
+
+function retryDelay(attempt, res) {
+  const seconds = Number(res?.headers?.get("retry-after"));
+  return seconds > 0 ? Math.min(seconds * 1000, MAX_WAIT_MS) : 2000 * 2 ** attempt;
+}
+
+function isTemporary(res) {
+  return RETRY_STATUS.has(res.status) || (res.status === 403 && Boolean(res.headers?.get("retry-after")));
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export function makeClient(token, fetchImpl = globalThis.fetch, wait = sleep) {
   return async function graphql(query, variables) {
-    const res = await fetchImpl(API, {
-      method: "POST",
-      headers: {
-        authorization: `bearer ${token}`,
-        "content-type": "application/json",
-        "user-agent": "org-activity-graph",
-      },
-      body: JSON.stringify({ query, variables }),
-    });
-    if (!res.ok) throw new Error(`GitHub GraphQL ${res.status}: ${(await res.text()).slice(0, 300)}`);
-    const body = await res.json();
-    if (body.errors?.length) throw new Error(`GitHub GraphQL: ${body.errors.map((e) => e.message).join("; ")}`);
-    return body.data;
+    for (let attempt = 0; ; attempt += 1) {
+      const canRetry = attempt < RETRIES;
+      let res;
+      try {
+        res = await fetchImpl(API, {
+          method: "POST",
+          headers: {
+            authorization: `bearer ${token}`,
+            "content-type": "application/json",
+            "user-agent": "org-activity-graph",
+          },
+          body: JSON.stringify({ query, variables }),
+        });
+      } catch (error) {
+        if (!canRetry) throw error;
+        await wait(retryDelay(attempt));
+        continue;
+      }
+      if (!res.ok) {
+        if (canRetry && isTemporary(res)) {
+          await wait(retryDelay(attempt, res));
+          continue;
+        }
+        throw new Error(`GitHub GraphQL ${res.status}: ${(await res.text()).slice(0, 300)}`);
+      }
+      const body = await res.json();
+      if (body.errors?.some((e) => e.type === "RATE_LIMITED")) {
+        throw new Error("GitHub's rate limit was reached. Try again in an hour, or pass a personal access token as token.");
+      }
+      if (body.errors?.length) {
+        // Long commit histories sometimes time out on GitHub's side.
+        if (canRetry && body.errors.some((e) => /timeout|timed out/i.test(e.message))) {
+          await wait(retryDelay(attempt));
+          continue;
+        }
+        throw new Error(`GitHub GraphQL: ${body.errors.map((e) => e.message).join("; ")}`);
+      }
+      return body.data;
+    }
   };
+}
+
+/** "User" or "Organization": the action draws either from the same login input. */
+export async function ownerKind(graphql, login) {
+  const { repositoryOwner } = await graphql(OWNER_QUERY, { login });
+  if (!repositoryOwner) throw new Error(`No user or organization named ${login} was found on GitHub.`);
+  return repositoryOwner.__typename;
 }
 
 /** True for automation accounts and any login or name the caller listed. */
@@ -142,5 +210,31 @@ export async function collectActivity(graphql, options) {
     // Strips name the repository, so only public ones can have one.
     if (!repo.isPrivate && wanted.has(repo.name.toLowerCase())) byRepo.set(repo.name, counts);
   }
-  return { total, byRepo, privateTotal, activeRepos };
+  const privateRepos = repos.filter((repo) => repo.isPrivate).length;
+  return { total, byRepo, privateTotal, activeRepos, privateRepos };
+}
+
+/**
+ * A person's year from GitHub's own contribution calendar, so the shades and
+ * the total match their profile. One query, with no repositories to walk.
+ */
+export async function collectUserActivity(graphql, login) {
+  const { user } = await graphql(CALENDAR_QUERY, { login });
+  const { totalContributions, weeks } = user.contributionsCollection.contributionCalendar;
+  const days = weeks.flatMap((week) => week.contributionDays);
+  const total = new Map();
+  const levels = new Map();
+  for (const day of days) {
+    if (day.contributionCount > 0) total.set(day.date, day.contributionCount);
+    levels.set(day.date, Math.max(0, CALENDAR_LEVELS.indexOf(day.contributionLevel)));
+  }
+  return {
+    total,
+    levels,
+    lastDay: days.at(-1)?.date,
+    totalContributions,
+    byRepo: new Map(),
+    privateTotal: new Map(),
+    activeRepos: 0,
+  };
 }
