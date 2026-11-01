@@ -7,7 +7,9 @@ import { join } from "node:path";
 
 import { buildCalendar, dayKey } from "./calendar.mjs";
 import { collectActivity, collectUserActivity, makeClient, ownerKind } from "./collect.mjs";
+import { publishBranch } from "./publish.mjs";
 import { adaptiveSvg, formatTitle, renderSvg } from "./render.mjs";
+import { runSummary } from "./summary.mjs";
 import { resolveTheme } from "./themes.mjs";
 import { settingWarnings } from "./warnings.mjs";
 
@@ -121,6 +123,23 @@ export async function run() {
     privateRepos,
   });
   for (const warning of warnings) console.log(`::warning::${warning}`);
+
+  const repository = process.env.GITHUB_REPOSITORY;
+  const branch = flag("publish") ? input("publish-branch", "activity") : undefined;
+  if (branch) {
+    if (!repository) throw new Error("publish only works inside a GitHub Actions run.");
+    publishBranch({
+      dir: outputDir,
+      branch,
+      token: input("publish-token", token),
+      repository,
+      serverUrl: process.env.GITHUB_SERVER_URL,
+    });
+    console.log(`Published to the ${branch} branch. The run's summary has the lines for your README.`);
+  }
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    appendFileSync(process.env.GITHUB_STEP_SUMMARY, runSummary({ title, repository, branch, fileName, org }));
+  }
   setOutput("total-commits", String(inWindow));
   setOutput("repositories", String(activeRepos));
 }

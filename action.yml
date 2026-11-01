@@ -69,6 +69,18 @@ inputs:
     description: Five comma-separated colors for the light variant, from no activity to most activity.
     required: false
     default: ""
+  publish:
+    description: Publish the SVG files to a branch of this repository, so a README can show them. Needs contents write permission.
+    required: false
+    default: "false"
+  publish-branch:
+    description: Branch that receives the SVG files. It keeps a single commit, so the default branch stays free of daily commits.
+    required: false
+    default: activity
+  publish-token:
+    description: Token used to publish. It is separate from token, which only needs to read.
+    required: false
+    default: ${{ github.token }}
   timezone:
     description: IANA time zone used to group commits by day, for example America/New_York.
     required: false
