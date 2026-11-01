@@ -210,7 +210,8 @@ export async function collectActivity(graphql, options) {
     // Strips name the repository, so only public ones can have one.
     if (!repo.isPrivate && wanted.has(repo.name.toLowerCase())) byRepo.set(repo.name, counts);
   }
-  return { total, byRepo, privateTotal, activeRepos };
+  const privateRepos = repos.filter((repo) => repo.isPrivate).length;
+  return { total, byRepo, privateTotal, activeRepos, privateRepos };
 }
 
 /**

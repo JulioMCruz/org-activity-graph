@@ -9,6 +9,7 @@ import { buildCalendar, dayKey } from "./calendar.mjs";
 import { collectActivity, collectUserActivity, makeClient, ownerKind } from "./collect.mjs";
 import { adaptiveSvg, formatTitle, renderSvg } from "./render.mjs";
 import { resolveTheme } from "./themes.mjs";
+import { settingWarnings } from "./warnings.mjs";
 
 const ORG_TITLE = "{commits} commits in the last year across {repos} repositories";
 const USER_TITLE = "{contributions} contributions in the last year";
@@ -29,6 +30,13 @@ function list(name) {
     .filter(Boolean);
 }
 
+// Inputs a user can turn on, for the warnings about the ones that do nothing.
+function inputsInUse() {
+  const flags = ["effects", "include-private", "private-strip", "include-forks", "include-archived"].filter(flag);
+  const lists = ["repos", "exclude-authors", "exclude-repos"].filter((name) => input(name));
+  return new Set([...flags, ...lists]);
+}
+
 function setOutput(name, value) {
   if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${value}\n`);
 }
@@ -47,7 +55,7 @@ export async function run() {
 
   const graphql = makeClient(token);
   const isUser = (await ownerKind(graphql, org)) === "User";
-  const { total, levels, lastDay, totalContributions, byRepo, privateTotal, activeRepos } = isUser
+  const { total, levels, lastDay, totalContributions, byRepo, privateTotal, activeRepos, privateRepos } = isUser
     ? await collectUserActivity(graphql, org)
     : await collectActivity(graphql, {
         org,
@@ -104,6 +112,15 @@ export async function run() {
   console.log(`Wrote ${adaptivePath}`);
 
   console.log(`${title}. Strips: ${strips.map((s) => s.name).join(", ") || "none"}.`);
+  const warnings = settingWarnings({
+    isUser,
+    set: inputsInUse(),
+    stripRepos,
+    strips: strips.map((s) => s.name),
+    season: resolveTheme("dark", themeOptions).season,
+    privateRepos,
+  });
+  for (const warning of warnings) console.log(`::warning::${warning}`);
   setOutput("total-commits", String(inWindow));
   setOutput("repositories", String(activeRepos));
 }
