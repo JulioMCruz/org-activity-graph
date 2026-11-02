@@ -6,7 +6,8 @@ import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { buildCalendar, dayKey } from "./calendar.mjs";
-import { collectActivity, collectUserActivity, makeClient, ownerKind } from "./collect.mjs";
+import { collectActivity, collectUserActivity, collectUserWork, makeClient, ownerKind } from "./collect.mjs";
+import { breakdown } from "./insights.mjs";
 import { publishBranch } from "./publish.mjs";
 import { adaptiveSvg, formatTitle, renderSvg } from "./render.mjs";
 import { runSummary } from "./summary.mjs";
@@ -43,6 +44,17 @@ function setOutput(name, value) {
   if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${value}\n`);
 }
 
+// A failed read costs the panel its languages, not the run: the graph still updates.
+async function personInsights(graphql, login) {
+  try {
+    const work = await collectUserWork(graphql, login);
+    return { ...breakdown(work), commits: work.commits, pullRequests: work.pullRequests };
+  } catch (error) {
+    console.log(`::warning::The insights panel is missing its languages and pull requests: ${error.message}`);
+    return {};
+  }
+}
+
 export async function run() {
   const org = input("org", process.env.GITHUB_REPOSITORY_OWNER);
   if (!org) throw new Error("Set the org input to a user or organization login.");
@@ -54,10 +66,11 @@ export async function run() {
   // A little over a year, so the first grid week is complete in any time zone.
   const since = new Date(now.getTime() - 372 * 24 * 60 * 60 * 1000);
   const stripRepos = list("repos");
+  const showInsights = flag("insights");
 
   const graphql = makeClient(token);
   const isUser = (await ownerKind(graphql, org)) === "User";
-  const { total, levels, lastDay, totalContributions, byRepo, privateTotal, activeRepos, privateRepos } = isUser
+  const { total, levels, lastDay, totalContributions, byRepo, privateTotal, activeRepos, privateRepos, work, privateCommits } = isUser
     ? await collectUserActivity(graphql, org)
     : await collectActivity(graphql, {
         org,
@@ -69,6 +82,7 @@ export async function run() {
         excluded: new Set(list("exclude-authors").map((v) => v.toLowerCase())),
         excludedRepos: new Set(list("exclude-repos").map((v) => v.toLowerCase())),
         stripRepos,
+        languages: showInsights,
       });
 
   const calendar = buildCalendar(total, lastDay ?? todayKey, levels);
@@ -81,6 +95,9 @@ export async function run() {
   }
   const inWindow = totalContributions ?? calendar.days.reduce((s, d) => s + d.count, 0);
   const title = formatTitle(input("title", isUser ? USER_TITLE : ORG_TITLE), inWindow, activeRepos);
+
+  let insights = null;
+  if (showInsights) insights = isUser ? await personInsights(graphql, org) : breakdown({ repos: work, privateCommits });
 
   const outputDir = input("output-dir", "dist");
   const fileName = input("file-name", "activity");
@@ -100,6 +117,7 @@ export async function run() {
       meta: { title, org, updatedKey: todayKey, unit: isUser ? "contribution" : "commit" },
       animate: flag("animate"),
       effects: flag("effects"),
+      insights,
     });
     rendered[mode] = svg;
     const path = join(outputDir, `${fileName}-${mode}.svg`);

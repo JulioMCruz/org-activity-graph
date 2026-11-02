@@ -61,6 +61,10 @@ inputs:
     description: Add the season's decoration, for the seasonal palettes. Falling leaves, snow, petals and more play when the graph loads, and a few pieces stay in the empty space around the squares.
     required: false
     default: "false"
+  insights:
+    description: Add a panel under the graph with the last 30 days day by day, languages, where the commits went, the busiest days and streaks. With animate, the busiest days also take turns on the calendar.
+    required: false
+    default: "false"
   colors-dark:
     description: Five comma-separated colors for the dark variant, from no activity to most activity.
     required: false
