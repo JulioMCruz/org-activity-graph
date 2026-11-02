@@ -273,3 +273,108 @@ test("a person's graph takes GitHub's shade and speaks of contributions", () => 
   assert.equal(formatTitle("{contributions} contributions in the last year", 1, 0), "1 contribution in the last year");
   assert.equal(formatTitle("{contributions} contributions in the last year", 14901, 0), "14,901 contributions in the last year");
 });
+
+const insights = {
+  languages: [
+    { name: "TypeScript", color: "#3178c6", share: 0.7 },
+    { name: "C++ <core>", color: null, share: 0.2 },
+  ],
+  places: [{ name: "acme", share: 0.9 }],
+};
+const panelMeta = { title: "4 contributions", org: "octocat", updatedKey: "2026-10-25", unit: "contribution" };
+const graphHeight = (svg) => Number(svg.match(/height="(\d+)"/)[1]);
+
+test("without insights the graph does not change", () => {
+  const theme = resolveTheme("dark", { palette: "autumn" });
+  const options = { calendar, theme, meta: panelMeta, animate: true, effects: true };
+  assert.equal(renderSvg(options).svg, renderSvg({ ...options, insights: null }).svg);
+});
+
+test("the panel puts a number on every one of the last 30 days", () => {
+  const { svg } = renderSvg({ calendar, theme: resolveTheme("dark"), meta: panelMeta, insights: { ...insights, commits: 1234, pullRequests: 56 } });
+  assert.equal(svg.match(/class="bar"/g).length, 30);
+  assert.equal(svg.match(/<text class="(repo )?num" [^>]*>\d+</g).length, 30);
+  assert.match(svg, />3 contributions, best day Oct 20 with 3</);
+  assert.match(svg, />1,234<\/text><text [^>]*>Public commits</);
+  assert.match(svg, />56<\/text><text [^>]*>Public PRs</);
+  assert.match(svg, />Where public commits went</);
+  assert.match(svg, />C\+\+ &lt;core&gt;</);
+  assert.match(svg, />Busiest weekday</);
+});
+
+test("the panel only grows the picture and keeps the graph where it was", () => {
+  const options = { calendar, theme: resolveTheme("dark"), meta: panelMeta };
+  const plain = renderSvg(options).svg;
+  const withPanel = renderSvg({ ...options, insights }).svg;
+  assert.ok(graphHeight(withPanel) > graphHeight(plain) + 200);
+  const squares = (svg) => svg.match(/<rect x="\d+" y="\d+" width="10" height="10"[^>]*>/g).join("");
+  assert.equal(squares(withPanel), squares(plain));
+});
+
+test("an organization gets facts of its own", () => {
+  const { svg } = renderSvg({ calendar, theme: resolveTheme("dark"), meta: { title: "t", org: "o", updatedKey: "2026-10-25" }, insights });
+  assert.match(svg, />Where the commits went</);
+  assert.match(svg, />Active days</);
+  assert.doesNotMatch(svg, /Public PRs/);
+});
+
+test("the panel works with no languages and with an empty year", () => {
+  const empty = buildCalendar(new Map(), "2026-10-25");
+  const { svg } = renderSvg({ calendar: empty, theme: resolveTheme("dark"), meta: panelMeta, insights: {} });
+  assert.doesNotMatch(svg, /undefined|NaN|Infinity/);
+  assert.doesNotMatch(svg, /Languages/);
+  assert.match(svg, />No contributions</);
+});
+
+test("large numbers stay short on the bars", () => {
+  const busy = buildCalendar(new Map([["2026-10-20", 1540], ["2026-10-21", 2000]]), "2026-10-25");
+  const { svg } = renderSvg({ calendar: busy, theme: resolveTheme("dark"), meta: panelMeta, insights });
+  assert.match(svg, />1\.5k</);
+  assert.match(svg, />2k</);
+});
+
+test("the reel plays only with animate and marks the right squares", () => {
+  const busy = buildCalendar(new Map([["2026-10-20", 9], ["2026-09-01", 5], ["2026-08-11", 2]]), "2026-10-25");
+  const options = { calendar: busy, theme: resolveTheme("dark"), meta: panelMeta, insights };
+  assert.doesNotMatch(renderSvg(options).svg, /class="rr"/);
+  const { svg } = renderSvg({ ...options, animate: true });
+  assert.equal(svg.match(/class="rr"/g).length, 3);
+  assert.match(svg, />Oct 20, 2026: 9 contributions</);
+  assert.match(svg, /prefers-reduced-motion:reduce\)\{\.rr\{animation:none/);
+  const square = svg.match(/<rect class="cell w\d+" x="(\d+)" y="(\d+)"[^>]*><title>9 contributions/);
+  assert.ok(svg.includes(`d="M${Number(square[1]) - 3} ${Number(square[2]) - 3}h16`));
+});
+
+test("the reel caption stays clear of the title and of what rests on the frame", () => {
+  const busy = buildCalendar(new Map([["2026-10-20", 9], ["2026-09-01", 5]]), "2026-10-25");
+  const options = { calendar: busy, insights, animate: true, effects: true };
+  for (const season of ["autumn", "halloween", "winter", "christmas", "newyear", "spring", "summer"]) {
+    const { svg, resting } = renderSvg({ ...options, theme: resolveTheme("dark", { palette: season }), meta: panelMeta });
+    const end = Number(svg.match(/<text class="repo" x="([\d.]+)" y="20" text-anchor="end">/)[1]);
+    for (const box of resting.filter((b) => b.y < 24)) assert.ok(end < box.x, `${season} caption ends at ${end}, a piece starts at ${box.x}`);
+  }
+  const long = { ...panelMeta, title: "x".repeat(88) };
+  const { svg } = renderSvg({ ...options, theme: resolveTheme("dark"), meta: long });
+  assert.equal(svg.match(/class="rr"/g).length, 2);
+  assert.doesNotMatch(svg, /y="20" text-anchor="end"/);
+});
+
+test("falling pieces stop at the edge of the graph", () => {
+  const options = { calendar, theme: resolveTheme("dark", { palette: "autumn" }), meta: panelMeta, effects: true };
+  const plain = renderSvg(options).svg;
+  const { svg } = renderSvg({ ...options, insights });
+  assert.doesNotMatch(plain, /clip-path="url\(#graph\)"/);
+  assert.match(svg, new RegExp(`<clipPath id="graph"><rect width="750" height="${graphHeight(plain)}"/></clipPath><g clip-path="url\\(#graph\\)"><g class="fx">`));
+  assert.match(svg, new RegExp(`translateY\\(${graphHeight(plain) + 16}px\\)`));
+});
+
+test("the adaptive file recolors the panel", () => {
+  const dark = resolveTheme("dark", { palette: "autumn" });
+  const light = resolveTheme("light", { palette: "autumn" });
+  const { svg } = renderSvg({ calendar, theme: dark, meta: panelMeta, insights, animate: true });
+  const adaptive = adaptiveSvg(svg, dark, light);
+  assert.match(adaptive, /text\{fill:#59636e\}\.title,\.repo\{fill:#1f2328\}/);
+  for (const color of [dark.border, dark.levels[3], dark.levels[4]]) assert.ok(adaptive.includes(`[fill="${color}"]`));
+  const panelText = svg.slice(svg.indexOf(">Last 30 days<") - 40).match(/<text class="[^"]*"/g);
+  assert.ok(panelText.every((tag) => /repo|num/.test(tag)));
+});
