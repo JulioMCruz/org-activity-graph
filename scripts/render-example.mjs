@@ -4,6 +4,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 
 import { buildCalendar } from "../src/calendar.mjs";
+import { breakdown } from "../src/insights.mjs";
 import { adaptiveSvg, formatTitle, renderSvg } from "../src/render.mjs";
 import { resolveTheme } from "../src/themes.mjs";
 
@@ -70,3 +71,27 @@ for (const season of ["autumn", "halloween", "winter", "christmas", "newyear", "
   writeFileSync(`docs/seasons/${season}.svg`, adaptive.replace(/\n/g, ""));
   console.log(`Wrote docs/seasons/${season}.svg`);
 }
+
+// The insights panel, with made-up languages for the same three repositories.
+const languages = (shares) => ({
+  totalSize: shares.reduce((sum, [, , size]) => sum + size, 0),
+  edges: shares.map(([name, color, size]) => ({ size, node: { name, color } })),
+});
+const sumOf = (name) => [...byRepo.get(name).values()].reduce((sum, n) => sum + n, 0);
+const work = [
+  { name: "web-app", commits: sumOf("web-app"), languages: languages([["TypeScript", "#3178c6", 72], ["CSS", "#663399", 18], ["JavaScript", "#f1e05a", 10]]) },
+  { name: "api", commits: sumOf("api"), languages: languages([["Go", "#00add8", 85], ["Shell", "#89e051", 15]]) },
+  { name: "runtime-images", commits: sumOf("runtime-images"), languages: languages([["Dockerfile", "#384d54", 60], ["Shell", "#89e051", 40]]) },
+];
+const panelOptions = { palette: "autumn" };
+const { svg: panelSvg } = renderSvg({
+  calendar,
+  theme: resolveTheme("dark", panelOptions),
+  meta: { title, org: "example-org", updatedKey: todayKey },
+  animate: true,
+  effects: true,
+  insights: breakdown({ repos: work }),
+});
+const panelAdaptive = adaptiveSvg(panelSvg, resolveTheme("dark", panelOptions), resolveTheme("light", panelOptions));
+writeFileSync("docs/insights.svg", panelAdaptive.replace(/\n/g, ""));
+console.log("Wrote docs/insights.svg");

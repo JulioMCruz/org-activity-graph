@@ -30,6 +30,9 @@ jobs:
           # animate: true
           # Snow, falling leaves, pumpkins and more, for the seasonal palettes.
           # effects: true
+          # A panel under the graph: the last 30 days, languages, where the
+          # commits went, the busiest days and streaks.
+          # insights: true
           # To count private repositories too, store a read-only token as a
           # secret and uncomment these two lines. Only daily totals are shown.
           # token: ${{ secrets.ORG_ACTIVITY_TOKEN }}
