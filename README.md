@@ -58,6 +58,7 @@ That's it. The graph updates every day and changes with the season on its own.
 - A count on every square, such as "12 commits on Oct 3, 2026". GitHub shows README images as plain pictures, so hovering does nothing there. The README links to a third file, `activity.svg`, which follows the visitor's theme and shows the count when you hover a square.
 - An optional reveal that lights up the year week by week when the graph loads. It is plain CSS, so it plays inside a README too.
 - Optional seasonal effects: snow, falling leaves, pumpkins, fireworks and more, in plain SVG and CSS.
+- An optional panel under the graph with the numbers GitHub keeps behind a hover: the last 30 days, languages, the busiest days and streaks. See [Insights](#insights).
 - No dependencies. The action is plain Node 24 and calls the GitHub GraphQL API.
 
 ## Personal profiles
@@ -78,6 +79,20 @@ An organization's profile page is `profile/README.md` in its `.github` repositor
 </a>
 
 Click the graph, then hover a square to see its count.
+
+## Insights
+
+GitHub shows a day's count only when you hover its square, and a README has no hover. Set `insights: true` to put the numbers on the picture, for a person or an organization:
+
+<img alt="Insights panel under the graph: the last 30 days as bars with a number on each, languages, where the commits went, and six facts about the year" src="docs/insights.svg">
+
+- **Last 30 days:** one bar per day, each with its number.
+- **Busiest days:** with `animate: true`, the six busiest days of the year take turns on the calendar, with the date and the count above it. They loop, and viewers who prefer reduced motion do not see them.
+- **Languages:** the commits of each repository, split by the share of its code in each language. It is an estimate of where the work went, not a count of lines.
+- **Where the commits went:** the accounts and organizations a person worked in, or an organization's most active repositories. An organization's private repositories join as one row, with no names.
+- **Facts:** best day, busiest weekday, current and longest streak, plus public commits and pull requests for a person, or active days for an organization.
+
+The languages and a person's accounts come from public repositories, up to 100 for a person, so private work never adds a name or a language. The default token is enough. Streaks only see the year on the graph, and a streak stays alive until a full day passes with nothing.
 
 ## Add the graph by hand
 
@@ -113,6 +128,7 @@ The run's summary gives you these lines with your repository already in place. T
 | `palette` | `github` | `github` greens, `ember`, a pink-to-ember ramp, or `seasonal`, which follows the calendar. See [Seasons](#seasons). |
 | `animate` | `false` | Light up the squares week by week when the graph loads. They wait dimmed, so every square stays readable. It plays once per load, and viewers who prefer reduced motion see the finished graph. |
 | `effects` | `false` | Add the season's decoration, for the seasonal palettes. See [Seasons](#seasons). |
+| `insights` | `false` | Add a panel under the graph with the last 30 days, languages, where the commits went, the busiest days and streaks. See [Insights](#insights). |
 | `colors-dark`, `colors-light` | empty | Five hex colors each, from no activity to most, to use your own palette. |
 | `timezone` | `UTC` | IANA time zone for grouping commits by day. |
 | `title` | `{commits} commits in the last year across {repos} repositories`, or `{contributions} contributions in the last year` for a person | Header text. |
