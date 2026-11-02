@@ -7,11 +7,17 @@ import { dayKey } from "./calendar.mjs";
 const API = "https://api.github.com/graphql";
 
 const REPOS_QUERY = `
-query($org: String!, $after: String, $privacy: RepositoryPrivacy) {
+query($org: String!, $after: String, $privacy: RepositoryPrivacy, $languages: Boolean = false) {
   organization(login: $org) {
     repositories(first: 50, after: $after, privacy: $privacy, orderBy: {field: PUSHED_AT, direction: DESC}) {
       pageInfo { hasNextPage endCursor }
-      nodes { name isPrivate isFork isArchived pushedAt defaultBranchRef { name } }
+      nodes {
+        name isPrivate isFork isArchived pushedAt defaultBranchRef { name }
+        languages(first: 12, orderBy: {field: SIZE, direction: DESC}) @include(if: $languages) {
+          totalSize
+          edges { size node { name color } }
+        }
+      }
     }
   }
 }`;
@@ -44,6 +50,31 @@ query($login: String!) {
       contributionCalendar {
         totalContributions
         weeks { contributionDays { date contributionCount contributionLevel } }
+      }
+    }
+  }
+}`;
+
+const WORK_QUERY = `
+query($login: String!) {
+  user(login: $login) {
+    contributionsCollection {
+      totalCommitContributions
+      totalPullRequestContributions
+      commitContributionsByRepository(maxRepositories: 100) {
+        contributions(first: 1) { totalCount }
+        repository {
+          isPrivate
+          owner { login }
+          languages(first: 12, orderBy: {field: SIZE, direction: DESC}) {
+            totalSize
+            edges { size node { name color } }
+          }
+        }
+      }
+      pullRequestContributionsByRepository(maxRepositories: 100) {
+        contributions(first: 1) { totalCount }
+        repository { isPrivate }
       }
     }
   }
@@ -125,7 +156,7 @@ export function isExcludedAuthor(author, excluded) {
   return excluded.has(login.toLowerCase()) || excluded.has(name.toLowerCase());
 }
 
-export async function listRepositories(graphql, { org, includePrivate, includeForks, includeArchived, excludedRepos = new Set(), since }) {
+export async function listRepositories(graphql, { org, includePrivate, includeForks, includeArchived, excludedRepos = new Set(), since, languages = false }) {
   const repos = [];
   let after = null;
   for (;;) {
@@ -133,6 +164,7 @@ export async function listRepositories(graphql, { org, includePrivate, includeFo
       org,
       after,
       privacy: includePrivate ? null : "PUBLIC",
+      languages,
     });
     const page = data.organization?.repositories;
     if (!page) throw new Error(`Organization ${org} was not found or the token cannot read it.`);
@@ -195,6 +227,9 @@ export async function collectActivity(graphql, options) {
   const privateTotal = new Map();
   const seen = new Set();
   const byRepo = new Map();
+  // Commits per public repository, and the private ones as a single number.
+  const work = [];
+  let privateCommits = 0;
   let activeRepos = 0;
   const wanted = new Set(options.stripRepos.map((r) => r.toLowerCase()));
   for (const repo of repos) {
@@ -207,11 +242,14 @@ export async function collectActivity(graphql, options) {
     });
     if (counts.size === 0) continue;
     activeRepos += 1;
+    const commits = [...counts.values()].reduce((sum, n) => sum + n, 0);
+    if (repo.isPrivate) privateCommits += commits;
+    else work.push({ name: repo.name, commits, languages: repo.languages });
     // Strips name the repository, so only public ones can have one.
     if (!repo.isPrivate && wanted.has(repo.name.toLowerCase())) byRepo.set(repo.name, counts);
   }
   const privateRepos = repos.filter((repo) => repo.isPrivate).length;
-  return { total, byRepo, privateTotal, activeRepos, privateRepos };
+  return { total, byRepo, privateTotal, activeRepos, privateRepos, work, privateCommits };
 }
 
 /**
@@ -236,5 +274,25 @@ export async function collectUserActivity(graphql, login) {
     byRepo: new Map(),
     privateTotal: new Map(),
     activeRepos: 0,
+  };
+}
+
+/**
+ * A person's public work: commits per repository owner with the languages of
+ * each repository, plus the public commit and pull request totals. Private work
+ * stays out, whatever the token can read. GitHub lists up to 100 repositories.
+ */
+export async function collectUserWork(graphql, login) {
+  const { user } = await graphql(WORK_QUERY, { login });
+  const collection = user.contributionsCollection;
+  const commitsByRepo = collection.commitContributionsByRepository;
+  const privateCount = (entries) =>
+    entries.filter((e) => e.repository.isPrivate).reduce((sum, e) => sum + e.contributions.totalCount, 0);
+  return {
+    commits: collection.totalCommitContributions - privateCount(commitsByRepo),
+    pullRequests: collection.totalPullRequestContributions - privateCount(collection.pullRequestContributionsByRepository),
+    repos: commitsByRepo
+      .filter((e) => !e.repository.isPrivate)
+      .map((e) => ({ name: e.repository.owner.login, commits: e.contributions.totalCount, languages: e.repository.languages })),
   };
 }

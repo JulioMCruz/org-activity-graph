@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { collectActivity, collectUserActivity, isExcludedAuthor, makeClient, ownerKind } from "../src/collect.mjs";
+import { collectActivity, collectUserActivity, collectUserWork, isExcludedAuthor, makeClient, ownerKind } from "../src/collect.mjs";
 
 test("bots and listed authors are left out", () => {
   const excluded = new Set(["ci-user"]);
@@ -203,4 +203,46 @@ test("retries stop after three", async () => {
   const api = fakeResponses({ status: 503 });
   await assert.rejects(makeClient("t", api.fetchImpl, api.wait)("q"), /GitHub GraphQL 503/);
   assert.equal(api.calls(), 4);
+});
+
+test("an organization keeps commits per public repository and only a number for private ones", async () => {
+  const languages = { totalSize: 10, edges: [{ size: 10, node: { name: "Go", color: "#00add8" } }] };
+  const { graphql, calls } = fakeGraphql({
+    repos: [{ ...repos[0], languages }, { ...repos[1], languages }],
+    commits,
+  });
+  const { work, privateCommits } = await collectActivity(graphql, {
+    org: "acme",
+    since: new Date(0),
+    timeZone: "UTC",
+    includePrivate: true,
+    excluded: new Set(),
+    stripRepos: [],
+    languages: true,
+  });
+  assert.deepEqual(work, [{ name: "web", commits: 1, languages }]);
+  assert.equal(privateCommits, 2);
+  assert.equal(calls[0].languages, true);
+});
+
+test("a person's work leaves private repositories out of every number", async () => {
+  const languages = { totalSize: 4, edges: [{ size: 4, node: { name: "Rust", color: "#dea584" } }] };
+  const entry = (owner, isPrivate, totalCount) => ({
+    contributions: { totalCount },
+    repository: { isPrivate, owner: { login: owner }, languages },
+  });
+  const graphql = async () => ({
+    user: {
+      contributionsCollection: {
+        totalCommitContributions: 15,
+        totalPullRequestContributions: 7,
+        commitContributionsByRepository: [entry("acme", false, 10), entry("secret-org", true, 5)],
+        pullRequestContributionsByRepository: [entry("acme", false, 4), entry("secret-org", true, 3)],
+      },
+    },
+  });
+  const work = await collectUserWork(graphql, "octocat");
+  assert.equal(work.commits, 10);
+  assert.equal(work.pullRequests, 4);
+  assert.deepEqual(work.repos, [{ name: "acme", commits: 10, languages }]);
 });
